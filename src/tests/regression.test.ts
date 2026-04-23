@@ -206,7 +206,9 @@ describe("tool auth failure — isError response", () => {
     const result = await handleGetIssue({ issueKey: "PROJ-1" }, MOCK_CONFIG as never);
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+    const first = result.content[0];
+    expect(first.type).toBe("text");
+    if (first.type === "text") expect(first.text).toContain("AUTH_REQUIRED");
   });
 
   it("jira_search_issues returns isError:true when session is missing", async () => {
@@ -225,6 +227,8 @@ describe("tool auth failure — isError response", () => {
     const result = await handleGetIssue({ issueKey: "not-valid-key" }, MOCK_CONFIG as never);
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("Invalid input");
+    const first = result.content[0];
+    expect(first.type).toBe("text");
+    if (first.type === "text") expect(first.text).toContain("Invalid input");
   });
 });

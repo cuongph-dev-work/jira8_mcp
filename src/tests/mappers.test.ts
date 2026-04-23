@@ -81,6 +81,55 @@ describe("mapIssue", () => {
   });
 });
 
+describe("mapIssue — attachments", () => {
+  it("maps attachment metadata from raw issue", () => {
+    const rawWithAttachment = {
+      ...rawFullIssue,
+      fields: {
+        ...rawFullIssue.fields,
+        attachment: [
+          {
+            id: "10001",
+            filename: "screenshot.png",
+            author: { displayName: "Alice Smith" },
+            created: "2024-01-16T14:30:00.000Z",
+            size: 245700,
+            mimeType: "image/png",
+            content: "https://jira.example.com/secure/attachment/10001/screenshot.png",
+          },
+          {
+            id: "10002",
+            filename: "error.log",
+            author: { displayName: "Bob Jones" },
+            created: "2024-01-17T09:00:00.000Z",
+            size: 12300,
+            mimeType: "text/plain",
+            content: "https://jira.example.com/secure/attachment/10002/error.log",
+          },
+        ],
+      },
+    };
+
+    const result = mapIssue(rawWithAttachment, BASE_URL);
+
+    expect(result.attachments).toHaveLength(2);
+
+    expect(result.attachments[0].filename).toBe("screenshot.png");
+    expect(result.attachments[0].mimeType).toBe("image/png");
+    expect(result.attachments[0].size).toBe(245700);
+    expect(result.attachments[0].author).toBe("Alice Smith");
+    expect(result.attachments[0].downloadUrl).toContain("screenshot.png");
+
+    expect(result.attachments[1].filename).toBe("error.log");
+    expect(result.attachments[1].mimeType).toBe("text/plain");
+  });
+
+  it("returns empty attachments array when no attachments", () => {
+    const result = mapIssue(rawFullIssue, BASE_URL);
+    expect(result.attachments).toEqual([]);
+  });
+});
+
 describe("mapIssueSummary", () => {
   it("returns only compact fields", () => {
     const result = mapIssueSummary(rawFullIssue, BASE_URL);

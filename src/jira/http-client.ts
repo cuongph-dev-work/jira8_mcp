@@ -83,6 +83,25 @@ export class JiraHttpClient {
   }
 
   // ---------------------------------------------------------------------------
+  // Attachment download
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Downloads an attachment's binary content from its direct URL.
+   * The URL is the `content` property from the Jira attachment metadata.
+   */
+  async downloadAttachment(downloadUrl: string): Promise<Buffer> {
+    const res = await this.http.get(downloadUrl, {
+      responseType: "arraybuffer",
+    });
+
+    this.checkForAuthFailure(res.status, downloadUrl, "");
+    this.assertOk(res.status, downloadUrl, "");
+
+    return Buffer.from(res.data as ArrayBuffer);
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 

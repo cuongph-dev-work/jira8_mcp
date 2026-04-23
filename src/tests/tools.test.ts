@@ -87,6 +87,8 @@ describe("handleGetIssue — session guard", () => {
     };
 
     const result = await handleGetIssue({ issueKey: "PROJ-1" }, mockConfig as never);
-    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+    const first = result.content[0];
+    expect(first.type).toBe("text");
+    if (first.type === "text") expect(first.text).toContain("AUTH_REQUIRED");
   });
 });

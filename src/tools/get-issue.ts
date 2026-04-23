@@ -1,9 +1,19 @@
 import { z } from "zod";
 import { loadAndValidateSession } from "../auth/session-manager.js";
 import { JiraHttpClient } from "../jira/http-client.js";
+import {
+  isReadableMimeType,
+  isImageMimeType,
+  extractContent,
+  formatSize,
+  MAX_READABLE_ATTACHMENTS,
+  MAX_TOTAL_CONTENT,
+  MAX_IMAGE_SIZE,
+  MAX_INLINE_IMAGES,
+} from "../jira/attachment-reader.js";
 import { isMcpError } from "../errors.js";
 import type { Config } from "../config.js";
-import type { JiraIssue } from "../types.js";
+import type { JiraIssue, JiraAttachment } from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Input schema
@@ -14,9 +24,30 @@ export const getIssueSchema = z.object({
     .string()
     .min(1, "issueKey is required")
     .regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key (e.g. PROJ-123)"),
+  includeAttachmentContent: z
+    .boolean()
+    .default(true)
+    .describe("If true (default), download and extract text content from readable attachments (text, PDF, DOCX) and include images inline."),
 });
 
 export type GetIssueInput = z.infer<typeof getIssueSchema>;
+
+// ---------------------------------------------------------------------------
+// MCP content types
+// ---------------------------------------------------------------------------
+
+interface TextContent {
+  type: "text";
+  text: string;
+}
+
+interface ImageContent {
+  type: "image";
+  data: string;      // base64
+  mimeType: string;
+}
+
+type McpContent = TextContent | ImageContent;
 
 // ---------------------------------------------------------------------------
 // Handler
@@ -29,14 +60,14 @@ export type GetIssueInput = z.infer<typeof getIssueSchema>;
 export async function handleGetIssue(
   rawInput: unknown,
   cfg: Config
-): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
+): Promise<{ content: McpContent[]; isError?: boolean }> {
   const parsed = getIssueSchema.safeParse(rawInput);
   if (!parsed.success) {
     const msg = parsed.error.errors.map((e) => e.message).join("; ");
     return errorContent(`Invalid input: ${msg}`);
   }
 
-  const { issueKey } = parsed.data;
+  const { issueKey, includeAttachmentContent } = parsed.data;
 
   let sessionCookies;
   try {
@@ -56,14 +87,21 @@ export async function handleGetIssue(
 
   try {
     const issue = await client.getIssue(issueKey);
-    return {
-      content: [
-        {
-          type: "text",
-          text: formatIssue(issue),
-        },
-      ],
-    };
+
+    const contentParts: McpContent[] = [];
+
+    // If content reading is enabled, download readable attachments + images
+    if (includeAttachmentContent && issue.attachments.length > 0) {
+      await enrichAttachments(issue, client, contentParts);
+    }
+
+    // Main text output (always first)
+    contentParts.unshift({
+      type: "text",
+      text: formatIssue(issue),
+    });
+
+    return { content: contentParts };
   } catch (err: unknown) {
     if (isMcpError(err)) {
       return errorContent(`[${err.code}] ${err.message}`);
@@ -73,13 +111,72 @@ export async function handleGetIssue(
 }
 
 // ---------------------------------------------------------------------------
+// Attachment enrichment
+// ---------------------------------------------------------------------------
+
+/**
+ * Downloads readable attachments for text extraction and images for inline display.
+ * Mutates attachment.content for readable types.
+ * Pushes image content parts to contentParts array.
+ */
+async function enrichAttachments(
+  issue: JiraIssue,
+  client: JiraHttpClient,
+  contentParts: McpContent[]
+): Promise<void> {
+  let totalContentSize = 0;
+  let readCount = 0;
+  let imageCount = 0;
+
+  for (const att of issue.attachments) {
+    // --- Readable text/PDF/DOCX ---
+    if (isReadableMimeType(att.mimeType) && readCount < MAX_READABLE_ATTACHMENTS) {
+      if (totalContentSize >= MAX_TOTAL_CONTENT) {
+        att.content = `⚠️ Total content limit reached (${formatSize(MAX_TOTAL_CONTENT)})`;
+        continue;
+      }
+
+      try {
+        const buffer = await client.downloadAttachment(att.downloadUrl);
+        const text = await extractContent(buffer, att.mimeType);
+        if (text) {
+          att.content = text;
+          totalContentSize += text.length;
+          readCount++;
+        }
+      } catch {
+        att.content = `⚠️ Failed to download attachment`;
+      }
+      continue;
+    }
+
+    // --- Images ---
+    if (isImageMimeType(att.mimeType) && imageCount < MAX_INLINE_IMAGES) {
+      if (att.size > MAX_IMAGE_SIZE) {
+        continue; // Skip oversized images
+      }
+
+      try {
+        const buffer = await client.downloadAttachment(att.downloadUrl);
+        contentParts.push({
+          type: "image",
+          data: buffer.toString("base64"),
+          mimeType: att.mimeType,
+        });
+        imageCount++;
+      } catch {
+        // Silently skip failed image downloads
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Formatting
 // ---------------------------------------------------------------------------
 
 function formatIssue(issue: JiraIssue): string {
   const lines: string[] = [];
-
-  console.log(JSON.stringify(issue, null, 2));
 
   // ── Header ──────────────────────────────────────────────────────────────
   lines.push(`# ${issue.key}: ${issue.summary}`);
@@ -223,6 +320,31 @@ function formatIssue(issue: JiraIssue): string {
       lines.push(`### Action`);
       lines.push(``);
       lines.push(issue.action);
+      lines.push(``);
+    }
+  }
+
+  // ── Attachments ─────────────────────────────────────────────────────────
+  if (issue.attachments.length > 0) {
+    lines.push(`## Attachments (${issue.attachments.length})`);
+    lines.push(``);
+    lines.push(`| File | Type | Size | Author | Date | URL |`);
+    lines.push(`|------|------|------|--------|------|-----|`);
+    for (const att of issue.attachments) {
+      lines.push(
+        `| ${att.filename} | ${att.mimeType} | ${formatSize(att.size)} | ${att.author ?? "—"} | ${formatDate(att.created)} | ${att.downloadUrl} |`
+      );
+    }
+    lines.push(``);
+
+    // Show extracted text content for each readable attachment
+    const readableAtts = issue.attachments.filter((a) => a.content);
+    for (const att of readableAtts) {
+      lines.push(`### 📄 ${att.filename}`);
+      lines.push(``);
+      lines.push("```");
+      lines.push(att.content!);
+      lines.push("```");
       lines.push(``);
     }
   }

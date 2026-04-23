@@ -23,9 +23,22 @@ function createMcpServer(): McpServer {
   // Tool: jira_get_issue
   server.tool(
     "jira_get_issue",
-    "Fetch a single Jira issue by key and return its details (summary, description, status, assignee, etc.)",
+    `Fetch a single Jira issue by key and return its full details.
+
+Returns: summary, description, status, assignee, reporter, priority, type, dates, time tracking, sub-tasks, bug/defect fields, and attachments.
+
+ATTACHMENTS:
+- Metadata always included: filename, MIME type, size, author, date, download URL.
+- When includeAttachmentContent=true (default): downloads and extracts text from readable files (text/*, PDF, DOCX) and includes images inline.
+- Limits: max 5 readable files extracted, 50KB per file, 200KB total text. Max 3 images, 5MB per image.
+- Set includeAttachmentContent=false to skip content download (faster, metadata only).`,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      includeAttachmentContent: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe("Download and extract attachment content (text/PDF/DOCX/images). Set false for metadata only."),
     },
     async (input) => {
       return handleGetIssue(input, config);
