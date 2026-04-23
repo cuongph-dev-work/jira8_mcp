@@ -28,17 +28,34 @@ function createMcpServer(): McpServer {
 Returns: summary, description, status, assignee, reporter, priority, type, dates, time tracking, sub-tasks, bug/defect fields, and attachments.
 
 ATTACHMENTS:
-- Metadata always included: filename, MIME type, size, author, date, download URL.
-- When includeAttachmentContent=true (default): downloads and extracts text from readable files (text/*, PDF, DOCX) and includes images inline.
-- Limits: max 5 readable files extracted, 50KB per file, 200KB total text. Max 3 images, 5MB per image.
-- Set includeAttachmentContent=false to skip content download (faster, metadata only).`,
+- Metadata (filename, type, size, author, date, URL) is ALWAYS included in the response.
+- Content extraction is OFF by default. Set includeAttachmentContent=true ONLY when the user explicitly asks about attachments, attached files, or images.
+- Readable files: text/*, PDF, DOCX → extracted text (max 50KB/file, 200KB total).
+- Images: PNG/JPEG/GIF/WEBP → returned inline so AI can see them (max 5MB/image).
+- Use maxImages and maxReadableFiles to control how many are downloaded.`,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       includeAttachmentContent: z
         .boolean()
         .optional()
-        .default(true)
-        .describe("Download and extract attachment content (text/PDF/DOCX/images). Set false for metadata only."),
+        .default(false)
+        .describe("Download attachment content. Default false — set true ONLY when user asks about attachments/files/images."),
+      maxImages: z
+        .number()
+        .int()
+        .min(0)
+        .max(10)
+        .optional()
+        .default(3)
+        .describe("Max images to include inline (0-10, default 3)."),
+      maxReadableFiles: z
+        .number()
+        .int()
+        .min(0)
+        .max(20)
+        .optional()
+        .default(5)
+        .describe("Max text/PDF/DOCX files to extract content from (0-20, default 5)."),
     },
     async (input) => {
       return handleGetIssue(input, config);

@@ -6,10 +6,8 @@ import {
   isImageMimeType,
   extractContent,
   formatSize,
-  MAX_READABLE_ATTACHMENTS,
   MAX_TOTAL_CONTENT,
   MAX_IMAGE_SIZE,
-  MAX_INLINE_IMAGES,
 } from "../jira/attachment-reader.js";
 import { isMcpError } from "../errors.js";
 import type { Config } from "../config.js";
@@ -26,8 +24,22 @@ export const getIssueSchema = z.object({
     .regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key (e.g. PROJ-123)"),
   includeAttachmentContent: z
     .boolean()
-    .default(true)
-    .describe("If true (default), download and extract text content from readable attachments (text, PDF, DOCX) and include images inline."),
+    .default(false)
+    .describe("Download and extract attachment content (text/PDF/DOCX/images). Default false — set true when user asks about attachments."),
+  maxImages: z
+    .number()
+    .int()
+    .min(0)
+    .max(10)
+    .default(3)
+    .describe("Max images to include inline (0-10, default 3)."),
+  maxReadableFiles: z
+    .number()
+    .int()
+    .min(0)
+    .max(20)
+    .default(5)
+    .describe("Max text/PDF/DOCX files to extract content from (0-20, default 5)."),
 });
 
 export type GetIssueInput = z.infer<typeof getIssueSchema>;
@@ -67,7 +79,7 @@ export async function handleGetIssue(
     return errorContent(`Invalid input: ${msg}`);
   }
 
-  const { issueKey, includeAttachmentContent } = parsed.data;
+  const { issueKey, includeAttachmentContent, maxImages, maxReadableFiles } = parsed.data;
 
   let sessionCookies;
   try {
@@ -90,9 +102,8 @@ export async function handleGetIssue(
 
     const contentParts: McpContent[] = [];
 
-    // If content reading is enabled, download readable attachments + images
     if (includeAttachmentContent && issue.attachments.length > 0) {
-      await enrichAttachments(issue, client, contentParts);
+      await enrichAttachments(issue, client, contentParts, { maxImages, maxReadableFiles });
     }
 
     // Main text output (always first)
@@ -122,7 +133,8 @@ export async function handleGetIssue(
 async function enrichAttachments(
   issue: JiraIssue,
   client: JiraHttpClient,
-  contentParts: McpContent[]
+  contentParts: McpContent[],
+  limits: { maxImages: number; maxReadableFiles: number }
 ): Promise<void> {
   let totalContentSize = 0;
   let readCount = 0;
@@ -130,7 +142,7 @@ async function enrichAttachments(
 
   for (const att of issue.attachments) {
     // --- Readable text/PDF/DOCX ---
-    if (isReadableMimeType(att.mimeType) && readCount < MAX_READABLE_ATTACHMENTS) {
+    if (isReadableMimeType(att.mimeType) && readCount < limits.maxReadableFiles) {
       if (totalContentSize >= MAX_TOTAL_CONTENT) {
         att.content = `⚠️ Total content limit reached (${formatSize(MAX_TOTAL_CONTENT)})`;
         continue;
@@ -151,7 +163,7 @@ async function enrichAttachments(
     }
 
     // --- Images ---
-    if (isImageMimeType(att.mimeType) && imageCount < MAX_INLINE_IMAGES) {
+    if (isImageMimeType(att.mimeType) && imageCount < limits.maxImages) {
       if (att.size > MAX_IMAGE_SIZE) {
         continue; // Skip oversized images
       }
