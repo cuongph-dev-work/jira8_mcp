@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { CUSTOM_FIELD, FIELD, ISSUE_TYPE } from "../jira/constants.js";
+import { createIssueSchema } from "../tools/create-issue.js";
 import { getIssueSchema } from "../tools/get-issue.js";
 import { searchIssuesSchema as searchSchema } from "../tools/search-issues.js";
 
@@ -51,6 +53,32 @@ describe("searchIssuesSchema", () => {
 
   it("rejects empty JQL", () => {
     const result = searchSchema.safeParse({ jql: "" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("createIssueSchema", () => {
+  it("accepts a valid create request", () => {
+    const result = createIssueSchema.safeParse({
+      issueTypeId: ISSUE_TYPE.TASK,
+      fields: {
+        [FIELD.PROJECT]: { key: "DNIEM" },
+        [FIELD.SUMMARY]: "Create MCP tool",
+        [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
+        [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
+        [FIELD.DUE_DATE]: "2026-04-30",
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an unsupported issueTypeId", () => {
+    const result = createIssueSchema.safeParse({
+      issueTypeId: "99999",
+      fields: {},
+    });
+
     expect(result.success).toBe(false);
   });
 });

@@ -1,0 +1,105 @@
+import { z } from "zod";
+import { loadAndValidateSession } from "../auth/session-manager.js";
+import { isMcpError } from "../errors.js";
+import { JiraHttpClient } from "../jira/http-client.js";
+import {
+  FIELD,
+  ISSUE_TYPE,
+  type IssueTypeId,
+} from "../jira/constants.js";
+import {
+  buildCreateIssuePayload,
+  buildCreateIssueResult,
+} from "../jira/create-issue.js";
+import type { Config } from "../config.js";
+
+export const createIssueSchema = z.object({
+  issueTypeId: z.nativeEnum(ISSUE_TYPE),
+  fields: z
+    .record(z.unknown())
+    .describe("Jira fields keyed by standard field names or customfield IDs."),
+});
+
+export type CreateIssueInput = z.infer<typeof createIssueSchema>;
+
+export async function handleCreateIssue(
+  rawInput: unknown,
+  cfg: Config
+): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
+  const parsed = createIssueSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    const msg = parsed.error.errors.map((e) => e.message).join("; ");
+    return errorContent(`Invalid input: ${msg}`);
+  }
+
+  const { issueTypeId, fields } = parsed.data as {
+    issueTypeId: IssueTypeId;
+    fields: Record<string, unknown>;
+  };
+
+  let sessionCookies;
+  try {
+    sessionCookies = await loadAndValidateSession(
+      cfg.JIRA_SESSION_FILE,
+      cfg.JIRA_BASE_URL,
+      cfg.JIRA_VALIDATE_PATH
+    );
+  } catch (err: unknown) {
+    if (isMcpError(err)) {
+      return authErrorContent(err.code, err.message);
+    }
+    throw err;
+  }
+
+  try {
+    const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
+    const payload = buildCreateIssuePayload(issueTypeId, fields);
+    const created = await client.createIssue(payload);
+    const rawSummary = fields[FIELD.SUMMARY];
+    const summary = typeof rawSummary === "string" ? rawSummary : "";
+    const result = buildCreateIssueResult(cfg.JIRA_BASE_URL, created, issueTypeId, summary);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: formatCreatedIssue(result),
+        },
+      ],
+    };
+  } catch (err: unknown) {
+    if (isMcpError(err)) {
+      return errorContent(`[${err.code}] ${err.message}`);
+    }
+    if (err instanceof Error) {
+      return errorContent(err.message);
+    }
+    throw err;
+  }
+}
+
+function formatCreatedIssue(issue: {
+  key: string;
+  url: string;
+  summary: string;
+  issueType: string;
+}): string {
+  return [
+    `# Created issue ${issue.key}`,
+    "",
+    `**Summary:** ${issue.summary}`,
+    `**Type:** ${issue.issueType}`,
+    `**URL:** ${issue.url}`,
+  ].join("\n");
+}
+
+function errorContent(message: string) {
+  return { content: [{ type: "text" as const, text: message }], isError: true as const };
+}
+
+function authErrorContent(code: string, message: string) {
+  return {
+    isError: true as const,
+    content: [{ type: "text" as const, text: `[${code}] ${message}` }],
+  };
+}

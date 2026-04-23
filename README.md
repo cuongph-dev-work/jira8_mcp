@@ -17,6 +17,7 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 - 💾 Persistent local session (Playwright storage state / cookies)
 - 🔍 `jira_get_issue` — fetch a single issue by key
 - 🔎 `jira_search_issues` — execute JQL and return a compact issue list
+- 📝 `jira_create_issue` — create an issue using issue-type-specific required and optional fields
 - 🛡️ Clean `SESSION_EXPIRED` / `AUTH_REQUIRED` errors with reauthentication hints
 - 🖥️ Three CLI utilities for session management
 
@@ -113,6 +114,20 @@ Execute a JQL query and return a compact issue list.
 
 **Output:** Total count + list of issues (key, summary, status, assignee, priority, updated, URL).
 
+---
+
+### `jira_create_issue`
+
+Create a Jira issue for a specific issue type.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueTypeId` | `string` | Jira issue type ID from `src/jira/constants.ts` |
+| `fields` | `object` | Jira create fields keyed by standard field names or `customfield_*` IDs |
+
+**Output:** Confirmation with created issue key, summary, issue type, and browser URL.
+
 ## Project Structure
 
 ```
@@ -128,10 +143,12 @@ src/
 ├── jira/
 │   ├── endpoints.ts       # URL builders (REST API v2)
 │   ├── mappers.ts         # Raw payload → typed output shapes
+│   ├── create-issue.ts    # Create-issue validation and payload helpers
 │   └── http-client.ts     # Cookie-authenticated Jira HTTP client
 ├── tools/
 │   ├── get-issue.ts       # jira_get_issue handler
-│   └── search-issues.ts   # jira_search_issues handler
+│   ├── search-issues.ts   # jira_search_issues handler
+│   └── create-issue.ts    # jira_create_issue handler
 ├── cli/
 │   ├── auth-login.ts      # jira-auth-login entry point
 │   ├── auth-check.ts      # jira-auth-check entry point
@@ -190,6 +207,7 @@ npm run build
 | `JIRA_HTTP_ERROR` | Unexpected HTTP error from Jira REST API |
 | `JIRA_RESPONSE_ERROR` | Jira returned an unexpected response shape |
 | `CONFIG_ERROR` | Invalid or missing environment variable |
+| `INVALID_INPUT` | Tool input or issue-type-specific field set is invalid |
 
 ## Security Notes
 

@@ -15,6 +15,13 @@ export function issueUrl(baseUrl: string, issueKey: string): string {
 }
 
 /**
+ * URL for the create-issue endpoint.
+ */
+export function createIssueUrl(baseUrl: string): string {
+  return `${baseUrl}${API_BASE}/issue`;
+}
+
+/**
  * URL for the JQL search endpoint.
  */
 export function searchUrl(baseUrl: string): string {

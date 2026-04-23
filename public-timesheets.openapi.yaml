@@ -1,0 +1,1582 @@
+openapi: 3.0.1
+info:
+  title: Tempo Timesheets
+  description: Welcome to TIMESHEETS API Documentation. Use this REST API to programmatically
+    transfer data to or from TIMESHEETS in order to integrate with other business
+    components. REST being based on open standards, you are free to use any web development
+    language to access the API.
+  termsOfService: https://www.tempo.io/terms-of-use
+  version: '1.0'
+  x-logo:
+    url: https://cdn2.hubspot.net/hubfs/2814970/openApi/TEMPO_OpenAPI.png
+    altText: Tempo Software
+    href: https://www.tempo.io/server-api-documentation/
+externalDocs:
+  description: Contact Tempo Customer Support.
+  url: https://tempo-io.atlassian.net/servicedesk/customer/portal/6
+servers:
+- url: http://{JIRA_BASE_URL}/rest/tempo-timesheets/4
+  variables:
+    JIRA_BASE_URL:
+      default: JIRA_BASE_URL
+security:
+- basicAuth: []
+paths:
+  /period/approval:
+    get:
+      tags:
+      - Period
+      summary: Get approval period
+      description: 'IMPORTANT: This is used with rest/tempo-timesheets/5'
+      operationId: getApprovalPeriods
+      parameters:
+      - name: dateFrom
+        in: query
+        description: Starting date
+        required: true
+        schema:
+          type: string
+      - name: dateTo
+        in: query
+        description: End date
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodsBean'
+        4XX:
+          description: Bad Request
+      servers:
+      - url: http://{JIRA_BASE_URL}/rest/tempo-timesheets/5
+        variables: {}
+      x-public: true
+  /period/secondary:
+    get:
+      tags:
+      - Period
+      summary: Get secondary approval period
+      description: 'IMPORTANT: This is used with rest/tempo-timesheets/5'
+      operationId: getSecondaryPeriods
+      parameters:
+      - name: dateFrom
+        in: query
+        description: Starting date
+        required: true
+        schema:
+          type: string
+      - name: dateTo
+        in: query
+        description: End date
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodsBean'
+        4XX:
+          description: Bad Request
+      servers:
+      - url: http://{JIRA_BASE_URL}/rest/tempo-timesheets/5
+        variables: {}
+      x-public: true
+  /timesheet-approval/pending:
+    get:
+      tags:
+      - Timesheet Approval
+      summary: Get timesheet approval for reviewer
+      operationId: getTimesheetApprovalsForReviewer_1
+      parameters:
+      - name: reviewerKey
+        in: query
+        description: Reviewer Key
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalBean'
+        4XX:
+          description: Bad Request
+      x-public: true
+  /timesheet-approval/log:
+    get:
+      tags:
+      - Timesheet Approval
+      summary: Get all approvals the user is allowed to see for a team in a given
+        period.
+      operationId: getTeamApprovalLog_1
+      parameters:
+      - name: periodStartDate
+        in: query
+        description: first day of the period. Defaults to today
+        required: true
+        schema:
+          type: string
+      - name: teamId
+        in: query
+        description: the id of the team the user wants to get the approval log for
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalBean'
+        4XX:
+          description: Bad Request
+      x-public: true
+  /timesheet-approval/current:
+    get:
+      tags:
+      - Timesheet Approval
+      summary: Get timesheet approval for specific user
+      operationId: getTimesheetApprovalsForUser_1
+      parameters:
+      - name: periodStartDate
+        in: query
+        description: first day of the period. Defaults to today.
+        required: true
+        schema:
+          type: string
+      - name: userKey
+        in: query
+        description: user key
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalBean'
+        4XX:
+          description: Bad Request
+      x-public: true
+  /timesheet-approval:
+    post:
+      tags:
+      - Timesheet Approval
+      summary: Posting Approvals
+      operationId: postApproval_1
+      requestBody:
+        description: approval object
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalInputBean'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalBean'
+        4XX:
+          description: Bad Request
+      x-public: true
+  /timesheet-approval/approval-statuses:
+    get:
+      tags:
+      - Timesheet Approval
+      summary: Get approval statuses for a specific user over multiple periods
+      operationId: getTimesheetApprovalsForUserOverMultiplePeriods_2
+      parameters:
+      - name: periodStartDate
+        in: query
+        description: first day of the period. Defaults to today
+        required: true
+        schema:
+          type: string
+      - name: userKey
+        in: query
+        description: user key
+        required: true
+        schema:
+          type: string
+      - name: numberOfPeriods
+        in: query
+        description: number of periods to query, counting backwards from today's period
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalBean'
+        4XX:
+          description: Bad Request
+      x-public: true
+  /timesheet-approval/user/{userKey}/log:
+    get:
+      tags:
+      - Timesheet Approval
+      summary: get approval log for a specific user within a time frame
+      operationId: getUserApprovalLog
+      parameters:
+      - name: userKey
+        in: path
+        description: user key
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        description: date describing the begining of the period
+        required: true
+        schema:
+          type: string
+      - name: to
+        in: query
+        description: date describing the end of the period
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalBean'
+        4XX:
+          description: Bad Request
+      x-public: true
+  /worklogs:
+    post:
+      tags:
+      - Worklogs
+      summary: Creates worklogs
+      operationId: createWorklog_1
+      requestBody:
+        description: Create Worklog
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimesheetWorklogBean'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TempoWorklogV4Bean'
+        4XX:
+          description: Bad Request
+      x-public: true
+  /worklogs/{worklogId}:
+    get:
+      tags:
+      - Worklogs
+      summary: Gets worklog
+      operationId: getWorklog_1
+      parameters:
+      - name: worklogId
+        in: path
+        description: Worklog Id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TempoWorklogV4Bean'
+        4XX:
+          description: Bad Request
+      x-public: true
+    put:
+      tags:
+      - Worklogs
+      summary: Update existing worklog
+      description: Update information on an already existing worklog. Please note
+        that it is not possible to update the worker or originTaskId, In order to
+        do so, you would have to delete the existing worklog and create a new one
+        on the chosen worker/originTaskId.
+      operationId: updateWorklog_1
+      parameters:
+      - name: worklogId
+        in: path
+        description: Worklog identifier
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        description: Add key-value pairs of the fields you're changing
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TimesheetWorklogUpdateBean'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TempoWorklogV4Bean'
+        4XX:
+          description: Bad Request
+      x-public: true
+    delete:
+      tags:
+      - Worklogs
+      summary: Deletes worklog
+      operationId: deleteWorklog_1
+      parameters:
+      - name: worklogId
+        in: path
+        description: Worklog Id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '204':
+          description: No Content
+        4XX:
+          description: Bad Request
+      x-public: true
+  /worklogs/search:
+    post:
+      tags:
+      - Worklogs
+      summary: Finds existing worklogs
+      operationId: searchWorklogs
+      requestBody:
+        description: Search for Worklogs
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchParamsBean'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TempoWorklogV4Bean'
+        4XX:
+          description: Bad Request
+      x-public: true
+components:
+  schemas:
+    AnalyticsBean:
+      type: object
+      properties:
+        event:
+          type: string
+          xml:
+            attribute: true
+        type:
+          type: string
+          xml:
+            attribute: true
+        properties:
+          type: object
+          additionalProperties:
+            type: object
+        traits:
+          type: object
+          additionalProperties:
+            type: object
+        context:
+          type: object
+          additionalProperties:
+            type: object
+        analyticsBeanValid:
+          type: boolean
+        typeValid:
+          type: boolean
+        typeScreen:
+          type: boolean
+        eventValid:
+          type: boolean
+        typeTrack:
+          type: boolean
+    PeriodOptionBean:
+      type: object
+      properties:
+        period:
+          type: string
+        name:
+          type: string
+        periodType:
+          type: string
+        periodView:
+          type: string
+        periodSelector:
+          type: string
+    IssueBean:
+      type: object
+      properties:
+        self:
+          type: string
+          format: uri
+          xml:
+            attribute: true
+        id:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        key:
+          type: string
+          xml:
+            attribute: true
+        remainingEstimateSeconds:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        summary:
+          type: string
+          xml:
+            attribute: true
+        internalIssue:
+          type: boolean
+          xml:
+            attribute: true
+    PeriodConfigurationBean:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+          xml:
+            attribute: true
+        startDay:
+          type: integer
+          format: int32
+          xml:
+            attribute: true
+        startMonth:
+          type: integer
+          format: int32
+          xml:
+            attribute: true
+        defaultPeriod:
+          type: boolean
+          xml:
+            attribute: true
+    PeriodBean:
+      type: object
+      properties:
+        periodView:
+          type: string
+          xml:
+            attribute: true
+          enum:
+          - WEEK
+          - PERIOD
+          - DISABLED
+        periodId:
+          type: string
+          readOnly: true
+          xml:
+            attribute: true
+        dateFrom:
+          $ref: '#/components/schemas/TempoDate'
+        dateTo:
+          $ref: '#/components/schemas/TempoDate'
+    PeriodsBean:
+      type: object
+      properties:
+        periods:
+          type: array
+          description: Period
+          items:
+            $ref: '#/components/schemas/PeriodBean'
+      xml:
+        name: periods
+    PeopleVersionBean:
+      type: object
+    ProjectBean:
+      type: object
+    VersionBean:
+      type: object
+      xml:
+        name: version
+    GracePeriodGrantBean:
+      type: object
+      properties:
+        memberKey:
+          type: string
+        approverComment:
+          type: string
+        graceHours:
+          type: integer
+          format: int32
+        dateFrom:
+          type: string
+        dateTo:
+          type: string
+    GracePeriodApproveBean:
+      type: object
+      properties:
+        approverComment:
+          type: string
+        graceHours:
+          type: integer
+          format: int32
+        dateFrom:
+          type: string
+        dateTo:
+          type: string
+    GracePeriodRejectBean:
+      type: object
+      properties:
+        approverComment:
+          type: string
+    GracePeriodRequestBean:
+      type: object
+      properties:
+        approverKey:
+          type: string
+        memberComment:
+          type: string
+        graceHours:
+          type: integer
+          format: int32
+        dateFrom:
+          type: string
+        dateTo:
+          type: string
+    ActionBean:
+      required:
+      - comment
+      - name
+      - reviewer
+      type: object
+      properties:
+        name:
+          type: string
+          xml:
+            attribute: true
+          enum:
+          - submit
+          - reject
+          - approve
+          - reopen
+          - migrated
+        comment:
+          type: string
+          xml:
+            attribute: true
+        reviewer:
+          $ref: '#/components/schemas/UserBean'
+        actor:
+          $ref: '#/components/schemas/UserBean'
+        created:
+          $ref: '#/components/schemas/TempoDateTime'
+    ApprovalBean:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserBean'
+        status:
+          type: string
+          description: Approval Status
+          readOnly: true
+          xml:
+            attribute: true
+          enum:
+          - approved
+          - waiting_for_approval
+          - ready_to_submit
+          - open
+          - approved
+          - waiting_for_approval
+          - ready_to_submit
+          - open
+        workedSeconds:
+          type: integer
+          format: int64
+          readOnly: true
+          xml:
+            attribute: true
+        submittedSeconds:
+          type: integer
+          format: int64
+          readOnly: true
+          xml:
+            attribute: true
+        requiredSeconds:
+          type: integer
+          description: Required Seconds
+          format: int64
+          readOnly: true
+          example: 3600
+          xml:
+            attribute: true
+        requiredSecondsRelativeToday:
+          type: integer
+          format: int64
+          readOnly: true
+          xml:
+            attribute: true
+        period:
+          $ref: '#/components/schemas/PeriodBean'
+        smartDateString:
+          type: string
+          readOnly: true
+        action:
+          $ref: '#/components/schemas/ActionBean'
+        worklogs:
+          $ref: '#/components/schemas/WorklogsLinkBean'
+        meta:
+          type: object
+          additionalProperties:
+            type: string
+      xml:
+        name: approval
+    TempoDate:
+      type: object
+      properties:
+        monthOfYear:
+          type: integer
+          format: int32
+        dayOfWeek:
+          type: integer
+          format: int32
+        dayOfMonth:
+          type: integer
+          format: int32
+        year:
+          type: integer
+          format: int32
+      readOnly: true
+    TempoDateTime:
+      type: object
+      readOnly: true
+    UserBean:
+      required:
+      - key
+      type: object
+      properties:
+        name:
+          type: string
+          readOnly: true
+          xml:
+            attribute: true
+        key:
+          type: string
+          xml:
+            attribute: true
+        displayName:
+          type: string
+          readOnly: true
+          xml:
+            attribute: true
+      description: User Key
+      example: johnDoe
+      xml:
+        name: user
+    WorklogsLinkBean:
+      type: object
+      readOnly: true
+    ActionInputBean:
+      type: object
+      properties:
+        name:
+          type: string
+          xml:
+            attribute: true
+          enum:
+          - submit
+          - reject
+          - approve
+          - reopen
+          - migrated
+        comment:
+          type: string
+          example: This is my comment.
+          xml:
+            attribute: true
+        reviewer:
+          $ref: '#/components/schemas/ReviewerInputBean'
+    ApprovalInputBean:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserInputBean'
+        period:
+          $ref: '#/components/schemas/PeriodInputBean'
+        action:
+          $ref: '#/components/schemas/ActionInputBean'
+      xml:
+        name: approval
+    PeriodInputBean:
+      type: object
+      properties:
+        dateFrom:
+          type: string
+          description: Start Date of Period
+          example: yyyy-MM-dd
+          xml:
+            attribute: true
+    ReviewerInputBean:
+      type: object
+      properties:
+        key:
+          type: string
+          example: joeSchmoe
+          xml:
+            attribute: true
+      description: User who is reviewing Approval
+    UserInputBean:
+      type: object
+      properties:
+        key:
+          type: string
+          example: johnDoe
+          xml:
+            attribute: true
+      description: User who is submitting Approval
+    TeamApprovalsWrapper:
+      type: object
+      properties:
+        period:
+          $ref: '#/components/schemas/PeriodBean'
+      xml:
+        name: team-approvals
+    AffectedEntityBean:
+      type: object
+      properties:
+        descriptionKey:
+          type: string
+        numberOfOccurrences:
+          type: integer
+          format: int64
+    UserSchedulesRequestBean:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        usernames:
+          type: array
+          items:
+            type: string
+    StaticListValue:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Static List Value ID
+          format: int32
+          readOnly: true
+          example: 12345
+          xml:
+            attribute: true
+        name:
+          type: string
+          description: Static List Value Name
+          example: myStaticListValueName
+          xml:
+            attribute: true
+        value:
+          type: string
+          description: Static List Value
+          example: value
+          xml:
+            attribute: true
+        removed:
+          type: boolean
+          description: Is Removed
+          readOnly: true
+          example: true
+          xml:
+            attribute: true
+        sequence:
+          type: integer
+          description: Sequence
+          format: int32
+          readOnly: true
+          example: 1
+          xml:
+            attribute: true
+        workAttributeId:
+          type: integer
+          description: Work Attribute ID
+          format: int32
+          readOnly: true
+          example: 12345
+          xml:
+            attribute: true
+      description: Static List Values.  Omit if work attribute is not a STATIC_LIST
+      xml:
+        name: static-list-value
+    WorkAttribute:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Work Attribute ID
+          format: int32
+          readOnly: true
+          example: 12345
+          xml:
+            attribute: true
+        key:
+          type: string
+          description: Work Attribute Key
+          readOnly: true
+          example: _abc_
+          xml:
+            attribute: true
+        name:
+          type: string
+          description: Work Attribute Name
+          example: abc
+          xml:
+            attribute: true
+        type:
+          $ref: '#/components/schemas/WorkAttributeType'
+        externalUrl:
+          type: string
+          description: External Url
+          readOnly: true
+          example: http://www.example.com
+          xml:
+            attribute: true
+        required:
+          type: boolean
+          description: Is Required
+          example: true
+          xml:
+            attribute: true
+        sequence:
+          type: integer
+          description: Sequence
+          format: int32
+          readOnly: true
+          example: 1
+          xml:
+            attribute: true
+        staticListValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaticListValue'
+      description: Work Attribute Value ID
+      xml:
+        name: work-attribute
+    WorkAttributeType:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Type Name
+          example: ACCOUNT, BILLABLE_SECONDS, CHECKBOX, DYNAMIC_DROPDOWN, INPUT_FIELD,
+            INPUT_NUMERIC, STATIC_LIST
+          xml:
+            attribute: true
+        value:
+          type: string
+          description: Type Value
+          example: ACCOUNT
+          xml:
+            attribute: true
+          enum:
+          - ACCOUNT
+          - BILLABLE_SECONDS
+          - CHECKBOX
+          - DYNAMIC_DROPDOWN
+          - INPUT_FIELD
+          - INPUT_NUMERIC
+          - STATIC_LIST
+        systemType:
+          type: boolean
+          description: Is System Type
+          example: true
+          xml:
+            attribute: true
+      description: Work Attribute Type
+      xml:
+        name: work-attribute-type
+    WorkAttributeValue:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Work Attribute Value ID
+          format: int32
+          readOnly: true
+          example: 12345
+          xml:
+            attribute: true
+        worklogId:
+          type: integer
+          description: Worklog ID
+          format: int64
+          example: 12345
+          xml:
+            attribute: true
+        workAttribute:
+          $ref: '#/components/schemas/WorkAttribute'
+        value:
+          type: string
+          description: Work Attribute Value
+          example: workAttributeValue
+          xml:
+            attribute: true
+        numericValue:
+          type: number
+          description: Numeric Value
+          format: double
+          example: 1.0
+        systemType:
+          type: boolean
+          description: Is System Type
+          example: true
+        numericAttribute:
+          type: boolean
+        billableAttribute:
+          type: boolean
+      xml:
+        name: work-attribute-value
+    WorklogAttributeValueBean:
+      type: object
+      properties:
+        key:
+          type: string
+          xml:
+            attribute: true
+        value:
+          type: string
+          xml:
+            attribute: true
+    WorklogBean:
+      type: object
+      properties:
+        timeSpentSeconds:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        billedSeconds:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        dateStarted:
+          type: string
+          xml:
+            attribute: true
+        dateCreated:
+          type: string
+          xml:
+            attribute: true
+        dateUpdated:
+          type: string
+          xml:
+            attribute: true
+        comment:
+          type: string
+          xml:
+            attribute: true
+        origin:
+          type: string
+          xml:
+            attribute: true
+        meta:
+          type: object
+          additionalProperties:
+            type: string
+        self:
+          type: string
+          format: uri
+          xml:
+            attribute: true
+        id:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        tempoWorklogId:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        jiraWorklogId:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        author:
+          $ref: '#/components/schemas/UserBean'
+        issue:
+          $ref: '#/components/schemas/IssueBean'
+        worklogAttributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorklogAttributeValueBean'
+        workAttributeValues:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkAttributeValue'
+    UserSchedulesV4RequestBean:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        userKeys:
+          type: array
+          items:
+            type: string
+    SearchParamsBean:
+      required:
+      - from
+      - to
+      type: object
+      properties:
+        from:
+          type: string
+          description: From Date
+          example: yyyy-MM-dd
+          xml:
+            attribute: true
+        to:
+          type: string
+          description: To Date
+          example: yyyy-MM-dd
+          xml:
+            attribute: true
+        worker:
+          type: array
+          items:
+            type: string
+            description: Worker User Key
+            example: johnDoe
+        taskId:
+          type: array
+          items:
+            type: integer
+            description: Issue ID
+            format: int64
+            example: 12345
+        taskKey:
+          type: array
+          items:
+            type: string
+            description: Issue Key
+            example: PROJ-1234
+        projectId:
+          type: array
+          items:
+            type: integer
+            description: Project ID
+            format: int64
+            example: 12345
+        projectKey:
+          type: array
+          items:
+            type: string
+            description: Project Key
+            example: PROJ
+        teamId:
+          type: array
+          items:
+            type: integer
+            description: Team ID
+            format: int64
+            example: 12345
+        roleId:
+          type: array
+          items:
+            type: integer
+            description: Role ID
+            format: int64
+            example: 12345
+        accountId:
+          type: array
+          items:
+            type: integer
+            description: Account ID
+            format: int64
+            example: 12345
+        accountKey:
+          type: array
+          items:
+            type: string
+            description: Account Key
+            example: ACC
+        filterId:
+          type: array
+          items:
+            type: integer
+            description: Filter ID
+            format: int64
+            example: 12345
+        customerId:
+          type: array
+          items:
+            type: integer
+            description: Customer ID
+            format: int32
+            example: 12345
+        categoryId:
+          type: array
+          items:
+            type: integer
+            description: Category ID
+            format: int32
+            example: 12345
+        categoryTypeId:
+          type: array
+          items:
+            type: integer
+            description: Category Type ID
+            format: int32
+            example: 12345
+        epicKey:
+          type: array
+          items:
+            type: string
+            description: Epic Key
+            example: PROJ-1234
+        locationIds:
+          type: array
+          items:
+            type: integer
+            description: Location ids
+            format: int64
+        includeSubtasks:
+          type: boolean
+          writeOnly: true
+    TempoWorklogIssueV4Bean:
+      type: object
+      properties:
+        originalEstimateSeconds:
+          type: integer
+          description: Original Estimated Seconds
+          format: int64
+          example: 3600
+        projectKey:
+          type: string
+          description: Project Key
+          example: PROJ
+        estimatedRemainingSeconds:
+          type: integer
+          description: Estimated Remaining Seconds
+          format: int64
+          example: 3600
+        parentKey:
+          type: string
+          description: Parent Key
+        parentIssue:
+          $ref: '#/components/schemas/TempoWorklogRootIssueV4Bean'
+        epicKey:
+          type: string
+          description: Epic Key
+        epicIssue:
+          $ref: '#/components/schemas/TempoWorklogRootIssueV4Bean'
+        epicName:
+          type: string
+        internalIssue:
+          type: boolean
+          description: Internal Issue
+        reporterKey:
+          type: string
+        issueStatus:
+          type: string
+          description: Issue Status
+        accountKey:
+          type: string
+          description: Account Key
+        issueType:
+          type: string
+          description: Issue Type
+        summary:
+          type: string
+          description: Summary
+          example: This is a summary of what I did.
+        iconUrl:
+          type: string
+          description: Icon URL
+          example: http://www.example.com
+        components:
+          type: array
+          description: Components
+          items:
+            type: integer
+            description: Components
+            format: int64
+            xml:
+              name: components
+        versions:
+          type: array
+          description: Versions
+          items:
+            type: integer
+            description: Versions
+            format: int64
+            xml:
+              name: versions
+        projectId:
+          type: integer
+          description: Project ID
+          format: int64
+          example: 12345
+        key:
+          type: string
+          description: Key
+        id:
+          type: integer
+          description: ID
+          format: int64
+          example: 12345
+    TempoWorklogLocationV4Bean:
+      type: object
+      properties:
+        name:
+          type: string
+        id:
+          type: integer
+          format: int64
+    TempoWorklogRootIssueV4Bean:
+      type: object
+      properties:
+        remainingEstimate:
+          type: integer
+          description: Original Estimate
+          format: int64
+          example: 3600
+          xml:
+            name: estimatedRemainingSeconds
+        originEstimate:
+          type: integer
+          description: Original Estimate
+          format: int64
+          example: 3600
+          xml:
+            name: originalEstimateSeconds
+        summary:
+          type: string
+          description: summary
+          example: This is a summary of what I did.
+        iconUrl:
+          type: string
+          description: Icon URL
+          example: http://www.example.com
+      description: Epic Issue
+    TempoWorklogV4Bean:
+      type: object
+      properties:
+        tempoWorklogId:
+          type: integer
+          format: int64
+        updaterKey:
+          type: string
+          description: Updater key
+          example: joeSchmoe
+          xml:
+            name: updater
+        workerKey:
+          type: string
+          description: Worker key
+          example: johnDoe
+          xml:
+            name: worker
+        billableSeconds:
+          type: integer
+          description: Billable Seconds
+          format: int64
+          example: 3600
+        jiraWorklogId:
+          type: integer
+          description: Jira Worklog ID
+          format: int64
+          example: 12345
+        timeSpentSeconds:
+          type: integer
+          description: Time Spent Seconds
+          format: int64
+          example: 3600
+        timeSpent:
+          description: Time Spent
+          example: 1d
+          type: string
+          xml:
+            name: timeSpent  
+        startDate:
+          type: string
+          description: Start Date
+          example: yyyy-MM-dd HH:mm:ss.SSS
+          xml:
+            name: started
+        originTaskId:
+          type: integer
+          description: Issue ID
+          format: int64
+          example: 12345
+          xml:
+            name: originTaskId
+        issue:
+          $ref: '#/components/schemas/TempoWorklogIssueV4Bean'
+        dateCreated:
+          type: string
+          description: Date Created
+          example: yyyy-MM-dd HH:mm:ss.SSS
+          xml:
+            name: dateCreated
+        comment:
+          type: string
+          description: Comment
+          example: This is my comment.
+        dateUpdated:
+          type: string
+          description: Date Updated
+          example: yyyy-MM-dd HH:mm:ss.SSS
+          xml:
+            name: dateUpdated
+        location:
+          $ref: '#/components/schemas/TempoWorklogLocationV4Bean'
+        originId:
+          type: integer
+          format: int64
+          xml:
+            name: originId
+        attributes:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/WorkAttributeValueBean'
+    WorkAttributeValueBean:
+      required:
+      - name
+      - type
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        workAttributeId:
+          type: integer
+          description: Work Attribute ID
+          format: int32
+          example: 12345
+          xml:
+            attribute: true
+        value:
+          type: string
+          description: Work Attribute Value
+          example: workAttributeValue
+          xml:
+            attribute: true
+        type:
+          type: string
+          description: Work Attribute
+          readOnly: true
+          xml:
+            attribute: true
+          enum:
+          - ACCOUNT
+          - STATIC_LIST
+          - BILLABLE_SECONDS
+          - CHECKBOX
+          - INPUT_FIELD
+          - DYNAMIC_DROPDOWN
+          - INPUT_NUMERIC
+          - STATIC_LIST
+        key:
+          type: string
+          description: Work Attribute Key
+          readOnly: true
+          example: _abc_
+          xml:
+            attribute: true
+        name:
+          type: string
+          description: Work Attribute Name
+          example: abc
+          xml:
+            attribute: true
+        workAttribute:
+          type: integer
+          description: Jira Worklog ID
+          format: int64
+          readOnly: true
+          example: 12345
+          xml:
+            name: work-attribute
+    TimesheetWorklogUpdateBean:
+      type: object
+      properties:
+        comment:
+          type: string
+          example: This is my comment.
+        started:
+          type: string
+          description: Start date of logged time
+          example: yyyy-MM-dd
+        endDate:
+          type: string
+          description: End date of logged time
+          nullable: true
+          example: yyyy-MM-dd
+        timeSpentSeconds:
+          type: integer
+          description: Time spent working
+          format: int64
+          example: 3600
+        billableSeconds:
+          type: integer
+          description: Billable time spent working
+          format: int64
+          nullable: true
+          example: 3600
+        remainingEstimate:
+          type: integer
+          description: Remaining Estimate Seconds
+          format: int64
+          example: 3600
+        includeNonWorkingDays:
+          type: boolean
+          description: Include Non Working Days
+          default: false
+        attributes:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/WorkAttributeValueBean'
+          description: Work Attribute(s)
+          example: {}
+    TimesheetWorklogBean:
+      type: object
+      properties:
+        worker:
+          type: string
+          description: User key of user logging work
+          example: johnDoe
+        comment:
+          type: string
+          example: This is my comment.
+        started:
+          type: string
+          description: Start date of logged time
+          example: yyyy-MM-dd
+        endDate:
+          type: string
+          description: End date of logged time
+          nullable: true
+          example: yyyy-MM-dd
+        timeSpentSeconds:
+          type: integer
+          description: Time spent working
+          format: int64
+          example: 3600
+        billableSeconds:
+          type: integer
+          description: Billable time spent working
+          format: int64
+          nullable: true
+          example: 3600
+        originTaskId:
+          type: string
+          description: Issue Key or ID
+          example: PROJ-1234 or 12345
+        remainingEstimate:
+          type: integer
+          description: Remaining Estimate Seconds
+          format: int64
+          example: 3600
+        includeNonWorkingDays:
+          type: boolean
+          description: Include Non Working Days
+          default: false
+        singleDay:
+          type: boolean
+          readOnly: true
+        attributes:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/WorkAttributeValueBean'
+          description: Work Attribute(s)
+          example: {}
+        end:
+          type: string
+          format: date
+          readOnly: true
+        start:
+          type: string
+          format: date-time
+          readOnly: true
+    WorkplanBean:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserBean'
+        totalPlanned:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+        totalWorked:
+          type: integer
+          format: int64
+          xml:
+            attribute: true
+    DateAggregatedResultBean:
+      type: object
+      properties:
+        date:
+          type: string
+          description: Date
+          example: yyyy-MM-dd
+          xml:
+            attribute: true
+        totalWorkedSeconds:
+          type: integer
+          description: Total Worked Seconds
+          format: int64
+          example: 3600
+          xml:
+            attribute: true
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic

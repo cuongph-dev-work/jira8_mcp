@@ -222,6 +222,26 @@ describe("tool auth failure — isError response", () => {
     expect(result.content[0].text).toContain("AUTH_REQUIRED");
   });
 
+  it("jira_create_issue returns isError:true when session is missing", async () => {
+    const { handleCreateIssue } = await import("../tools/create-issue.js");
+    const result = await handleCreateIssue(
+      {
+        issueTypeId: "10000",
+        fields: {
+          project: { key: "DNIEM" },
+          summary: "Create issue",
+          customfield_12100: { id: "10400" },
+          customfield_10339: [{ id: "10300" }],
+          duedate: "2026-04-30",
+        },
+      },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
   it("jira_get_issue with invalid key format returns isError:true", async () => {
     const { handleGetIssue } = await import("../tools/get-issue.js");
     const result = await handleGetIssue({ issueKey: "not-valid-key" }, MOCK_CONFIG as never);

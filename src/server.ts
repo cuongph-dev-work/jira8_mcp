@@ -4,6 +4,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { config } from "./config.js";
+import { ISSUE_TYPE } from "./jira/constants.js";
+import { handleCreateIssue } from "./tools/create-issue.js";
 import { handleGetIssue } from "./tools/get-issue.js";
 import { handleSearchIssues } from "./tools/search-issues.js";
 
@@ -168,6 +170,23 @@ DATE FORMATS: yyyy/MM/dd, period (-5d, -1w), date functions (startOfMonth(), end
     },
     async (input) => {
       return handleSearchIssues(input, config);
+    }
+  );
+
+  // Tool: jira_create_issue
+  server.tool(
+    "jira_create_issue",
+    "Create a Jira issue for a specific issue type using required and optional fields defined in src/jira/constants.ts.",
+    {
+      issueTypeId: z
+        .nativeEnum(ISSUE_TYPE)
+        .describe("Jira issue type ID from src/jira/constants.ts, e.g. 10000 for Task."),
+      fields: z
+        .record(z.unknown())
+        .describe("Jira create payload fields keyed by FIELD/CUSTOM_FIELD IDs. Do not include issuetype; it is injected from issueTypeId."),
+    },
+    async (input) => {
+      return handleCreateIssue(input, config);
     }
   );
 

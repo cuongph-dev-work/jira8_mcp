@@ -197,3 +197,20 @@ export interface JiraSearchResult {
   total: number;
   issues: JiraIssueSummary[];
 }
+
+/** Transport-level create issue result returned by Jira POST /issue */
+export interface JiraCreatedIssueTransportResult {
+  id: string;
+  key: string;
+  url: string;
+}
+
+/** Stable create issue result returned by jira_create_issue */
+export interface JiraCreatedIssue {
+  id: string;
+  key: string;
+  url: string;
+  issueTypeId: string;
+  issueType: string;
+  summary: string;
+}

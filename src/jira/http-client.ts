@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from "axios";
 import {
+  createIssueUrl,
   issueUrl,
   searchUrl,
   ISSUE_FIELDS,
@@ -7,7 +8,12 @@ import {
 } from "./endpoints.js";
 import { mapIssue, mapIssueSummary } from "./mappers.js";
 import { jiraHttpError, jiraResponseError, sessionExpired } from "../errors.js";
-import type { JiraIssue, JiraSearchResult, SessionCookies } from "../types.js";
+import type {
+  JiraCreatedIssueTransportResult,
+  JiraIssue,
+  JiraSearchResult,
+  SessionCookies,
+} from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Client
@@ -79,6 +85,31 @@ export class JiraHttpClient {
       issues: (body.issues as Array<{ key: string; fields?: Record<string, unknown> }>).map(
         (raw) => mapIssueSummary(raw, this.baseUrl)
       ),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // jira_create_issue
+  // ---------------------------------------------------------------------------
+
+  async createIssue(
+    payload: { fields: Record<string, unknown> }
+  ): Promise<JiraCreatedIssueTransportResult> {
+    const url = createIssueUrl(this.baseUrl);
+    const res = await this.http.post(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data as { id?: string; key?: string };
+    if (!body || typeof body.id !== "string" || typeof body.key !== "string") {
+      throw jiraResponseError("Unexpected create issue response shape", body);
+    }
+
+    return {
+      id: body.id,
+      key: body.key,
+      url: `${this.baseUrl}/browse/${body.key}`,
     };
   }
 

@@ -7,7 +7,8 @@ export type ErrorCode =
   | "SESSION_EXPIRED"
   | "JIRA_HTTP_ERROR"
   | "JIRA_RESPONSE_ERROR"
-  | "CONFIG_ERROR";
+  | "CONFIG_ERROR"
+  | "INVALID_INPUT";
 
 /**
  * Structured internal error. All layers throw this instead of plain Error
@@ -53,6 +54,10 @@ export function jiraResponseError(message: string, raw?: unknown): McpError {
 
 export function configError(message: string, details?: unknown): McpError {
   return new McpError("CONFIG_ERROR", message, details);
+}
+
+export function invalidInput(message: string, details?: unknown): McpError {
+  return new McpError("INVALID_INPUT", message, details);
 }
 
 // ---------------------------------------------------------------------------
