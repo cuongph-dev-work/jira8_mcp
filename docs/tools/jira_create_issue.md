@@ -15,6 +15,13 @@ Create a Jira issue through the internal Jira 8 REST API.
 | `issueTypeId` | `string` | ✅ | Jira issue type ID from `ISSUE_TYPE` in `src/jira/constants.ts` |
 | `fields` | `Record<string, unknown>` | ✅ | Jira create payload fields keyed by standard field names (`FIELD.*`) or custom field IDs (`CUSTOM_FIELD.*`) |
 
+### Description Support
+
+`fields.description` supports two forms:
+
+- `string`: server automatically converts it to a minimal ADF document before sending to Jira
+- ADF JSON object: server validates the basic ADF document shape and forwards it unchanged
+
 ### Validation Rules
 
 - `issueTypeId` must be one of the IDs in `ISSUE_TYPE`
@@ -23,6 +30,7 @@ Create a Jira issue through the internal Jira 8 REST API.
   - required IDs from `REQUIRED_FIELDS[issueTypeId]`
   - optional IDs from `OPTIONAL_FIELDS[issueTypeId]`
 - Do not pass `issuetype` in `fields`; the tool injects it from `issueTypeId`
+- If `fields.description` is present, it must be either a `string` or a valid ADF document object
 
 ## Output
 
@@ -65,6 +73,23 @@ All errors return `isError: true` in the MCP response.
       "description": "Minimal Task payload with an optional description"
     }
   }
+}
+```
+
+The payload above is sent to Jira with `description` normalized to:
+
+```json
+{
+  "type": "doc",
+  "version": 1,
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "Minimal Task payload with an optional description" }
+      ]
+    }
+  ]
 }
 ```
 

@@ -1179,3 +1179,45 @@ export function getAllowedFields(issueTypeId: IssueTypeId): readonly string[] {
   const required = REQUIRED_FIELDS[issueTypeId].filter((fieldId) => fieldId !== FIELD.ISSUE_TYPE);
   return [...required, ...OPTIONAL_FIELDS[issueTypeId]];
 }
+
+// ---------------------------------------------------------------------------
+// Tempo Timesheets — Work Attribute constants
+// ---------------------------------------------------------------------------
+
+/** Tempo work attribute IDs */
+export const TEMPO_WORK_ATTRIBUTE = {
+  PROCESS: { id: 1, key: "_Process_", name: "Process" },
+  TYPE_OF_WORK: { id: 2, key: "_TypeOfWork_", name: "Type Of Work" },
+} as const;
+
+/** Allowed values for Tempo "Process" work attribute */
+export const TEMPO_PROCESS = [
+  "Project Management",
+  "Requirement",
+  "Design_UI/UX",
+  "Design Basic",
+  "Design Detail",
+  "Coding",
+  "Test UT",
+  "Test IT",
+  "Test Other",
+  "Deployment",
+  "UAT",
+  "Configuaration Management",
+  "Other_billable",
+  "Other_unbillable",
+] as const;
+
+export type TempoProcess = (typeof TEMPO_PROCESS)[number];
+
+/** Allowed values for Tempo "Type Of Work" work attribute */
+export const TEMPO_TYPE_OF_WORK = [
+  "Create",
+  "Correct",
+  "Study",
+  "Review",
+  "Test",
+  "Translate",
+] as const;
+
+export type TempoTypeOfWork = (typeof TEMPO_TYPE_OF_WORK)[number];

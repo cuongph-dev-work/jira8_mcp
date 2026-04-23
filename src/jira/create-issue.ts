@@ -12,6 +12,22 @@ export interface JiraCreateIssuePayload {
   fields: Record<string, unknown>;
 }
 
+interface AdfTextNode {
+  type: "text";
+  text: string;
+}
+
+interface AdfParagraphNode {
+  type: "paragraph";
+  content: AdfTextNode[];
+}
+
+interface AdfDocument {
+  type: "doc";
+  version: number;
+  content: AdfParagraphNode[];
+}
+
 export function validateCreateIssueFields(
   issueTypeId: IssueTypeId,
   fields: Record<string, unknown>
@@ -48,10 +64,11 @@ export function buildCreateIssuePayload(
   fields: Record<string, unknown>
 ): JiraCreateIssuePayload {
   validateCreateIssueFields(issueTypeId, fields);
+  const normalizedFields = normalizeCreateIssueFields(fields);
 
   return {
     fields: {
-      ...fields,
+      ...normalizedFields,
       [FIELD.ISSUE_TYPE]: { id: issueTypeId },
     },
   };
@@ -71,4 +88,61 @@ export function buildCreateIssueResult(
     issueType: ISSUE_TYPE_LABEL[issueTypeId],
     summary,
   };
+}
+
+function normalizeCreateIssueFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const description = fields[FIELD.DESCRIPTION];
+  if (description == null) {
+    return fields;
+  }
+
+  return {
+    ...fields,
+    [FIELD.DESCRIPTION]: normalizeDescription(description),
+  };
+}
+
+function normalizeDescription(description: unknown): string | AdfDocument {
+  if (typeof description === "string") {
+    return buildAdfDocument(description);
+  }
+
+  if (isAdfDocument(description)) {
+    return description;
+  }
+
+  throw invalidInput(
+    "description must be a string or a valid ADF document."
+  );
+}
+
+function buildAdfDocument(text: string): AdfDocument {
+  return {
+    type: "doc",
+    version: 1,
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text }],
+      },
+    ],
+  };
+}
+
+function isAdfDocument(value: unknown): value is AdfDocument {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const maybeDoc = value as {
+    type?: unknown;
+    version?: unknown;
+    content?: unknown;
+  };
+
+  return (
+    maybeDoc.type === "doc" &&
+    typeof maybeDoc.version === "number" &&
+    Array.isArray(maybeDoc.content)
+  );
 }

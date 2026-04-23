@@ -124,7 +124,7 @@ Create a Jira issue for a specific issue type.
 | Field | Type | Description |
 |---|---|---|
 | `issueTypeId` | `string` | Jira issue type ID from `src/jira/constants.ts` |
-| `fields` | `object` | Jira create fields keyed by standard field names or `customfield_*` IDs |
+| `fields` | `object` | Jira create fields keyed by standard field names or `customfield_*` IDs; `fields.description` accepts `string` or raw ADF |
 
 **Output:** Confirmation with created issue key, summary, issue type, and browser URL.
 

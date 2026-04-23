@@ -8,6 +8,7 @@ import { ISSUE_TYPE } from "./jira/constants.js";
 import { handleCreateIssue } from "./tools/create-issue.js";
 import { handleGetIssue } from "./tools/get-issue.js";
 import { handleSearchIssues } from "./tools/search-issues.js";
+import { handleAddWorklog } from "./tools/add-worklog.js";
 
 // ---------------------------------------------------------------------------
 // MCP server factory
@@ -170,6 +171,55 @@ DATE FORMATS: yyyy/MM/dd, period (-5d, -1w), date functions (startOfMonth(), end
     },
     async (input) => {
       return handleSearchIssues(input, config);
+    }
+  );
+
+  // Tool: jira_add_worklog
+  server.tool(
+    "jira_add_worklog",
+    `Log work (create a worklog) on a Jira issue via Tempo Timesheets.
+
+Automatically detects the current authenticated user — always logs work as yourself.
+
+DURATION FORMAT:
+- Use Nd (days = 8 hours), Nh (hours), Nm (minutes)
+- Examples: "2h", "30m", "1d", "1d 4h 30m"
+
+DATE FORMAT: yyyy-MM-dd (e.g. "2026-04-24")
+
+WORK ATTRIBUTES:
+- process: Project Management, Requirement, Design_UI/UX, Design Basic, Design Detail, Coding, Test UT, Test IT, Test Other, Deployment, UAT, Configuaration Management, Other_billable, Other_unbillable
+- typeOfWork: Create, Correct, Study, Review, Test, Translate
+
+Returns: confirmation with Tempo worklog ID, issue details, and logged duration.`,
+    {
+      issueKey: z.string().describe("Jira issue key to log work against, e.g. PROJ-123"),
+      timeSpent: z
+        .string()
+        .describe('Duration: use Nd (days=8h), Nh, Nm. Examples: "2h", "1d 4h 30m"'),
+      startDate: z
+        .string()
+        .describe("Date of work in yyyy-MM-dd format"),
+      comment: z
+        .string()
+        .optional()
+        .describe("Description of work performed"),
+      process: z
+        .string()
+        .optional()
+        .describe("Tempo Process attribute (e.g. Coding, Test UT, Requirement)"),
+      typeOfWork: z
+        .string()
+        .optional()
+        .describe("Tempo Type Of Work attribute (Create, Correct, Study, Review, Test, Translate)"),
+      includeNonWorkingDays: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Include weekends/holidays in multi-day worklogs (default false)"),
+    },
+    async (input) => {
+      return handleAddWorklog(input, config);
     }
   );
 

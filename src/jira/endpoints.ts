@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 const API_BASE = "/rest/api/2";
+const TEMPO_API_BASE = "/rest/tempo-timesheets/4";
 
 /**
  * URL for a single issue.
@@ -26,6 +27,20 @@ export function createIssueUrl(baseUrl: string): string {
  */
 export function searchUrl(baseUrl: string): string {
   return `${baseUrl}${API_BASE}/search`;
+}
+
+/**
+ * URL for the current-user endpoint (GET /rest/api/2/myself).
+ */
+export function myselfUrl(baseUrl: string): string {
+  return `${baseUrl}${API_BASE}/myself`;
+}
+
+/**
+ * URL for the Tempo create-worklog endpoint (POST).
+ */
+export function tempoCreateWorklogUrl(baseUrl: string): string {
+  return `${baseUrl}${TEMPO_API_BASE}/worklogs`;
 }
 
 import { CUSTOM_FIELD } from "./constants.js";

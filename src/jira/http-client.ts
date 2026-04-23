@@ -2,7 +2,9 @@ import axios, { type AxiosInstance } from "axios";
 import {
   createIssueUrl,
   issueUrl,
+  myselfUrl,
   searchUrl,
+  tempoCreateWorklogUrl,
   ISSUE_FIELDS,
   SEARCH_FIELDS,
 } from "./endpoints.js";
@@ -10,9 +12,12 @@ import { mapIssue, mapIssueSummary } from "./mappers.js";
 import { jiraHttpError, jiraResponseError, sessionExpired } from "../errors.js";
 import type {
   JiraCreatedIssueTransportResult,
+  JiraCurrentUser,
   JiraIssue,
   JiraSearchResult,
   SessionCookies,
+  TempoWorklogInput,
+  TempoWorklogResult,
 } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -130,6 +135,81 @@ export class JiraHttpClient {
     this.assertOk(res.status, downloadUrl, "");
 
     return Buffer.from(res.data as ArrayBuffer);
+  }
+  // ---------------------------------------------------------------------------
+  // Time tracking (lightweight — for worklog remaining estimate)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Fetches only the `remainingEstimateSeconds` for an issue.
+   * Uses `?fields=timetracking` for a lightweight call.
+   * Returns 0 if the field is not set.
+   */
+  async getIssueRemainingEstimate(issueKey: string): Promise<number> {
+    const url = issueUrl(this.baseUrl, issueKey) + "?fields=timetracking";
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data as {
+      fields?: {
+        timetracking?: { remainingEstimateSeconds?: number };
+      };
+    };
+
+    return body?.fields?.timetracking?.remainingEstimateSeconds ?? 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Current user (for Tempo worker key)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Fetches the currently authenticated Jira user.
+   * Used to obtain the `key` field required as `worker` by the Tempo API.
+   */
+  async getCurrentUser(): Promise<JiraCurrentUser> {
+    const url = myselfUrl(this.baseUrl);
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data as { key?: string; name?: string; displayName?: string };
+    if (!body || typeof body.key !== "string" || typeof body.name !== "string") {
+      throw jiraResponseError("Unexpected /myself response shape", body);
+    }
+
+    return {
+      key: body.key,
+      name: body.name,
+      displayName: body.displayName ?? body.name,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tempo Timesheets — create worklog
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Creates a worklog via the Tempo Timesheets REST API.
+   * POST /rest/tempo-timesheets/4/worklogs
+   */
+  async createWorklog(payload: TempoWorklogInput): Promise<TempoWorklogResult[]> {
+    const url = tempoCreateWorklogUrl(this.baseUrl);
+    const res = await this.http.post(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    // Tempo returns an array of created worklogs
+    const body = res.data;
+    if (!Array.isArray(body)) {
+      throw jiraResponseError("Expected array response from Tempo POST /worklogs", body);
+    }
+
+    return body as TempoWorklogResult[];
   }
 
   // ---------------------------------------------------------------------------

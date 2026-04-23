@@ -78,6 +78,65 @@ describe("buildCreateIssuePayload", () => {
 
     expect(payload.fields[FIELD.ISSUE_TYPE]).toEqual({ id: ISSUE_TYPE.BUG });
   });
+
+  it("converts a string description to a minimal ADF document", () => {
+    const payload = buildCreateIssuePayload(ISSUE_TYPE.TASK, {
+      [FIELD.PROJECT]: { key: "DNIEM" },
+      [FIELD.SUMMARY]: "Task with plain text description",
+      [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
+      [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
+      [FIELD.DUE_DATE]: "2026-04-30",
+      [FIELD.DESCRIPTION]: "Line 1\nLine 2",
+    });
+
+    expect(payload.fields[FIELD.DESCRIPTION]).toEqual({
+      type: "doc",
+      version: 1,
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Line 1\nLine 2" }],
+        },
+      ],
+    });
+  });
+
+  it("keeps a raw ADF description unchanged", () => {
+    const adfDescription = {
+      type: "doc",
+      version: 1,
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Already structured" }],
+        },
+      ],
+    };
+
+    const payload = buildCreateIssuePayload(ISSUE_TYPE.TASK, {
+      [FIELD.PROJECT]: { key: "DNIEM" },
+      [FIELD.SUMMARY]: "Task with ADF description",
+      [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
+      [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
+      [FIELD.DUE_DATE]: "2026-04-30",
+      [FIELD.DESCRIPTION]: adfDescription,
+    });
+
+    expect(payload.fields[FIELD.DESCRIPTION]).toEqual(adfDescription);
+  });
+
+  it("rejects an invalid description type", () => {
+    expect(() =>
+      buildCreateIssuePayload(ISSUE_TYPE.TASK, {
+        [FIELD.PROJECT]: { key: "DNIEM" },
+        [FIELD.SUMMARY]: "Task with invalid description",
+        [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
+        [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
+        [FIELD.DUE_DATE]: "2026-04-30",
+        [FIELD.DESCRIPTION]: 123,
+      })
+    ).toThrow(/description must be a string or a valid ADF document/i);
+  });
 });
 
 describe("JiraHttpClient.createIssue", () => {

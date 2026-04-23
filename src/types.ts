@@ -214,3 +214,60 @@ export interface JiraCreatedIssue {
   issueType: string;
   summary: string;
 }
+
+/** Minimal shape returned by GET /rest/api/2/myself */
+export interface JiraCurrentUser {
+  /** Internal user key — used by Tempo as the `worker` field */
+  key: string;
+  /** Login username */
+  name: string;
+  /** Human-readable display name */
+  displayName: string;
+}
+
+/** Tempo work attribute value (used inside worklog attributes map) */
+export interface TempoWorkAttributeValue {
+  name: string;
+  workAttributeId: number;
+  value: string;
+}
+
+/** Payload for POST /rest/tempo-timesheets/4/worklogs */
+export interface TempoWorklogInput {
+  worker: string;
+  originTaskId: string;
+  /** Start date in yyyy-MM-dd format */
+  started: string;
+  /** Duration in seconds */
+  timeSpentSeconds: number;
+  comment?: string;
+  /** End date in yyyy-MM-dd format (multi-day worklogs) */
+  endDate?: string | null;
+  billableSeconds?: string;
+  originId?: number;
+  remainingEstimate?: number;
+  includeNonWorkingDays?: boolean;
+  /** Tempo work attributes (e.g. _Process_, _TypeOfWork_) */
+  attributes?: Record<string, TempoWorkAttributeValue>;
+}
+
+/** Single worklog entry from Tempo POST /worklogs response */
+export interface TempoWorklogResult {
+  tempoWorklogId: number;
+  jiraWorklogId: number | null;
+  workerKey: string;
+  timeSpentSeconds: number;
+  /** Human-readable duration, e.g. "1d" */
+  timeSpent: string;
+  startDate: string;
+  originTaskId: number;
+  comment: string | null;
+  billableSeconds: number | null;
+  dateCreated: string;
+  dateUpdated: string;
+  issue: {
+    key: string;
+    summary: string;
+    projectKey: string;
+  };
+}
