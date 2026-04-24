@@ -22,7 +22,7 @@ export async function handleAddAttachment(
 
   let filePath: string;
   try {
-    filePath = resolveWorkspaceFilePath(parsed.data.filePath);
+    filePath = resolveWorkspaceFilePath(parsed.data.filePath, cfg.ATTACHMENT_WORKSPACE);
   } catch (err: unknown) {
     if (isMcpError(err)) return errorContent(`[${err.code}] ${err.message}`);
     throw err;
@@ -56,8 +56,7 @@ export async function handleAddAttachment(
   }
 }
 
-function resolveWorkspaceFilePath(filePath: string): string {
-  const workspaceRoot = process.cwd();
+function resolveWorkspaceFilePath(filePath: string, workspaceRoot: string): string {
   const resolvedPath = resolve(filePath);
   const relativePath = relative(workspaceRoot, resolvedPath);
 

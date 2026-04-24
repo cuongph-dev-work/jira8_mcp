@@ -36,6 +36,11 @@ const schema = z.object({
   PLAYWRIGHT_BROWSER: z
     .enum(["chromium", "firefox", "webkit"])
     .default("chromium"),
+
+  ATTACHMENT_WORKSPACE: z
+    .string()
+    .default("./downloads")
+    .describe("Directory where downloaded attachments are saved (created if missing)"),
 });
 
 export type Config = z.infer<typeof schema>;

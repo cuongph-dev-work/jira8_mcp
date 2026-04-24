@@ -190,6 +190,7 @@ describe("tool auth failure — isError response", () => {
     LOG_LEVEL: "info",
     PLAYWRIGHT_HEADLESS: false,
     PLAYWRIGHT_BROWSER: "chromium",
+    ATTACHMENT_WORKSPACE: process.cwd(),
   };
 
   // Drive session validation failure via the session-store mock:

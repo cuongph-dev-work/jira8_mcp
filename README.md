@@ -39,6 +39,7 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 - 📅 `jira_get_my_worklogs` — list the authenticated user's Tempo worklogs
 - 📅 `jira_update_worklog` / `jira_delete_worklog` — correct or remove Tempo worklogs
 - 📎 `jira_add_attachment` — upload workspace files as issue attachments
+- 📤 `jira_upload_attachment_content` — attach AI-generated content (text, CSV, JSON…) directly without a local file
 - 🗂️ `jira_get_projects` / `jira_get_components` / `jira_get_priorities` — discover common Jira metadata
 - 🛡️ Clean `SESSION_EXPIRED` / `AUTH_REQUIRED` errors with reauthentication hints
 - 🖥️ Three CLI utilities for session management
@@ -517,15 +518,34 @@ Delete a Tempo worklog by id.
 
 ### `jira_add_attachment`
 
-Upload a local file from the current workspace to an issue.
+Upload a local file from the allowed workspace directory to an issue.
 
 **Input:**
 | Field | Type | Description |
 |---|---|---|
 | `issueKey` | `string` | Jira issue key |
-| `filePath` | `string` | Path to a file inside the current workspace |
+| `filePath` | `string` | Path to a file inside the `ATTACHMENT_WORKSPACE` directory |
+
+Files outside the configured `ATTACHMENT_WORKSPACE` are rejected. Set the env var to restrict the allowed root directory.
 
 **Output:** Uploaded attachment ids, filenames, sizes, and issue URL.
+
+---
+
+### `jira_upload_attachment_content`
+
+Upload in-memory content as a Jira issue attachment — no local file needed.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+| `filename` | `string` | Filename with extension, e.g. `report.md`, `data.csv` |
+| `content` | `string` | Plain text (utf8) or base64-encoded content |
+| `encoding` | `"utf8" \| "base64"` | Default `utf8` |
+| `mimeType` | `string` | Optional MIME type override; inferred from extension if omitted |
+
+**Output:** Uploaded attachment id, filename, size, MIME type, and issue URL.
 
 ---
 

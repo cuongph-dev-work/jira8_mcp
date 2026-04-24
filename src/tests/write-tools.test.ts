@@ -130,6 +130,7 @@ describe("transition/comment tool handlers", () => {
     LOG_LEVEL: "info",
     PLAYWRIGHT_HEADLESS: false,
     PLAYWRIGHT_BROWSER: "chromium" as const,
+    ATTACHMENT_WORKSPACE: process.cwd(),
   };
 
   beforeEach(() => {
