@@ -1,5 +1,6 @@
 import { invalidInput } from "../errors.js";
 import type { JiraCreatedIssue } from "../types.js";
+import { normalizeAdfValue, type AdfDocument } from "./adf.js";
 import {
   FIELD,
   ISSUE_TYPE_LABEL,
@@ -10,22 +11,6 @@ import {
 
 export interface JiraCreateIssuePayload {
   fields: Record<string, unknown>;
-}
-
-interface AdfTextNode {
-  type: "text";
-  text: string;
-}
-
-interface AdfParagraphNode {
-  type: "paragraph";
-  content: AdfTextNode[];
-}
-
-interface AdfDocument {
-  type: "doc";
-  version: number;
-  content: AdfParagraphNode[];
 }
 
 export function validateCreateIssueFields(
@@ -103,46 +88,12 @@ function normalizeCreateIssueFields(fields: Record<string, unknown>): Record<str
 }
 
 function normalizeDescription(description: unknown): string | AdfDocument {
-  if (typeof description === "string") {
-    return buildAdfDocument(description);
+  try {
+    return normalizeAdfValue(description);
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      throw invalidInput("description must be a string or a valid ADF document.", err);
+    }
+    throw err;
   }
-
-  if (isAdfDocument(description)) {
-    return description;
-  }
-
-  throw invalidInput(
-    "description must be a string or a valid ADF document."
-  );
-}
-
-function buildAdfDocument(text: string): AdfDocument {
-  return {
-    type: "doc",
-    version: 1,
-    content: [
-      {
-        type: "paragraph",
-        content: [{ type: "text", text }],
-      },
-    ],
-  };
-}
-
-function isAdfDocument(value: unknown): value is AdfDocument {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const maybeDoc = value as {
-    type?: unknown;
-    version?: unknown;
-    content?: unknown;
-  };
-
-  return (
-    maybeDoc.type === "doc" &&
-    typeof maybeDoc.version === "number" &&
-    Array.isArray(maybeDoc.content)
-  );
 }

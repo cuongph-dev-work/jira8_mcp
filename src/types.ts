@@ -215,6 +215,22 @@ export interface JiraCreatedIssue {
   summary: string;
 }
 
+export interface JiraIssueTransition {
+  id: string;
+  name: string;
+  toStatus: string | null;
+}
+
+export interface JiraCommentResult {
+  id: string;
+  issueKey: string;
+  url: string;
+}
+
+export interface JiraIssueLinkResult {
+  linkId: string;
+}
+
 /** Minimal shape returned by GET /rest/api/2/myself */
 export interface JiraCurrentUser {
   /** Internal user key — used by Tempo as the `worker` field */
@@ -270,4 +286,13 @@ export interface TempoWorklogResult {
     summary: string;
     projectKey: string;
   };
+}
+
+export interface TempoWorklogListItem {
+  tempoWorklogId: number;
+  issueKey: string;
+  timeSpent: string;
+  timeSpentSeconds: number;
+  startDate: string;
+  comment: string | null;
 }

@@ -5,9 +5,17 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 import { config } from "./config.js";
 import { ISSUE_TYPE } from "./jira/constants.js";
+import { handleAddComment } from "./tools/add-comment.js";
+import { handleAssignIssue } from "./tools/assign-issue.js";
 import { handleCreateIssue } from "./tools/create-issue.js";
 import { handleGetIssue } from "./tools/get-issue.js";
+import { handleGetCreateMeta } from "./tools/get-create-meta.js";
+import { handleGetMyWorklogs } from "./tools/get-my-worklogs.js";
+import { handleGetTransitions } from "./tools/get-transitions.js";
+import { handleLinkIssues } from "./tools/link-issues.js";
 import { handleSearchIssues } from "./tools/search-issues.js";
+import { handleTransitionIssue } from "./tools/transition-issue.js";
+import { handleUpdateIssueFields } from "./tools/update-issue-fields.js";
 import { handleAddWorklog } from "./tools/add-worklog.js";
 
 // ---------------------------------------------------------------------------
@@ -221,6 +229,105 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
     },
     async (input) => {
       return handleAddWorklog(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_add_comment",
+    "Add a comment to a Jira issue. Accepts either plain text or raw ADF JSON.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      body: z.union([z.string(), z.record(z.unknown())]).describe("Comment body as plain text or raw ADF document."),
+    },
+    async (input) => {
+      return handleAddComment(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_transition_issue",
+    "Transition a Jira issue to a target workflow state by transition ID, with optional comment and field updates.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      transitionId: z.string().describe("Transition ID from jira_get_transitions or Jira workflow metadata."),
+      comment: z.union([z.string(), z.record(z.unknown())]).optional().describe("Optional transition comment as plain text or raw ADF."),
+      fields: z.record(z.unknown()).optional().describe("Optional field updates to send with the transition."),
+    },
+    async (input) => {
+      return handleTransitionIssue(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_get_create_meta",
+    "Return static create metadata for Jira issue types from src/jira/constants.ts, including required fields, optional fields, and known option sets.",
+    {
+      issueTypeId: z.nativeEnum(ISSUE_TYPE).optional().describe("Optional issue type ID to narrow the returned metadata."),
+    },
+    async (input) => {
+      return handleGetCreateMeta(input);
+    }
+  );
+
+  server.tool(
+    "jira_update_issue_fields",
+    "Update a curated set of issue fields on an existing Jira issue. Description supports plain text or raw ADF.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      fields: z.record(z.unknown()).describe("Curated set of updateable Jira fields."),
+    },
+    async (input) => {
+      return handleUpdateIssueFields(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_link_issues",
+    "Create a Jira issue link between two issues, with an optional comment.",
+    {
+      inwardIssueKey: z.string().describe("Source/inward Jira issue key"),
+      outwardIssueKey: z.string().describe("Target/outward Jira issue key"),
+      linkType: z.string().describe("Jira issue link type name, e.g. Blocks"),
+      comment: z.union([z.string(), z.record(z.unknown())]).optional().describe("Optional link comment as plain text or raw ADF."),
+    },
+    async (input) => {
+      return handleLinkIssues(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_assign_issue",
+    "Assign a Jira issue to a user by assigneeName or assigneeKey.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      assigneeName: z.string().optional().describe("Jira username/name for assignment"),
+      assigneeKey: z.string().optional().describe("Jira internal user key for assignment"),
+    },
+    async (input) => {
+      return handleAssignIssue(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_get_transitions",
+    "List the currently available workflow transitions for a Jira issue.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+    },
+    async (input) => {
+      return handleGetTransitions(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_get_my_worklogs",
+    "List the authenticated user's Tempo worklogs for an optional date range.",
+    {
+      dateFrom: z.string().optional().describe("Optional start date in yyyy-MM-dd format"),
+      dateTo: z.string().optional().describe("Optional end date in yyyy-MM-dd format"),
+    },
+    async (input) => {
+      return handleGetMyWorklogs(input, config);
     }
   );
 

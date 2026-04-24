@@ -1,22 +1,31 @@
 import axios, { type AxiosInstance } from "axios";
 import {
   createIssueUrl,
+  issueCommentUrl,
+  issueAssignUrl,
+  issueLinkUrl,
+  issueTransitionsUrl,
   issueUrl,
   myselfUrl,
   searchUrl,
   tempoCreateWorklogUrl,
+  tempoWorklogsUrl,
   ISSUE_FIELDS,
   SEARCH_FIELDS,
 } from "./endpoints.js";
 import { mapIssue, mapIssueSummary } from "./mappers.js";
 import { jiraHttpError, jiraResponseError, sessionExpired } from "../errors.js";
 import type {
+  JiraCommentResult,
   JiraCreatedIssueTransportResult,
   JiraCurrentUser,
   JiraIssue,
+  JiraIssueLinkResult,
+  JiraIssueTransition,
   JiraSearchResult,
   SessionCookies,
   TempoWorklogInput,
+  TempoWorklogListItem,
   TempoWorklogResult,
 } from "../types.js";
 
@@ -116,6 +125,131 @@ export class JiraHttpClient {
       key: body.key,
       url: `${this.baseUrl}/browse/${body.key}`,
     };
+  }
+
+  async getTransitions(issueKey: string): Promise<JiraIssueTransition[]> {
+    const url = issueTransitionsUrl(this.baseUrl, issueKey);
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data as {
+      transitions?: Array<{ id?: string; name?: string; to?: { name?: string } }>;
+    };
+    if (!body || !Array.isArray(body.transitions)) {
+      throw jiraResponseError("Unexpected transitions response shape", body);
+    }
+
+    return body.transitions.map((transition) => ({
+      id: transition.id ?? "",
+      name: transition.name ?? "",
+      toStatus: transition.to?.name ?? null,
+    }));
+  }
+
+  async transitionIssue(
+    issueKey: string,
+    payload: {
+      transition: { id: string };
+      update?: Record<string, unknown>;
+      fields?: Record<string, unknown>;
+    }
+  ): Promise<void> {
+    const url = issueTransitionsUrl(this.baseUrl, issueKey);
+    const res = await this.http.post(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+  }
+
+  async addComment(
+    issueKey: string,
+    payload: { body: unknown }
+  ): Promise<JiraCommentResult> {
+    const url = issueCommentUrl(this.baseUrl, issueKey);
+    const res = await this.http.post(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data as { id?: string };
+    if (!body || typeof body.id !== "string") {
+      throw jiraResponseError("Unexpected add comment response shape", body);
+    }
+
+    return {
+      id: body.id,
+      issueKey,
+      url: `${this.baseUrl}/browse/${issueKey}`,
+    };
+  }
+
+  async updateIssueFields(
+    issueKey: string,
+    payload: { fields: Record<string, unknown> }
+  ): Promise<void> {
+    const url = issueUrl(this.baseUrl, issueKey);
+    const res = await this.http.put(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+  }
+
+  async linkIssues(payload: {
+    type: { name: string };
+    inwardIssue: { key: string };
+    outwardIssue: { key: string };
+    comment?: { body: unknown };
+  }): Promise<JiraIssueLinkResult> {
+    const url = issueLinkUrl(this.baseUrl);
+    const res = await this.http.post(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data as { linkId?: string };
+    if (!body || typeof body.linkId !== "string") {
+      throw jiraResponseError("Unexpected link issue response shape", body);
+    }
+
+    return { linkId: body.linkId };
+  }
+
+  async assignIssue(
+    issueKey: string,
+    payload: { name?: string; key?: string }
+  ): Promise<void> {
+    const url = issueAssignUrl(this.baseUrl, issueKey);
+    const res = await this.http.put(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+  }
+
+  async getMyWorklogs(input: {
+    workerKey: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<TempoWorklogListItem[]> {
+    const url = tempoWorklogsUrl(this.baseUrl);
+    const res = await this.http.get(url, {
+      params: {
+        worker: input.workerKey,
+        from: input.dateFrom,
+        to: input.dateTo,
+      },
+    });
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data;
+    if (!Array.isArray(body)) {
+      throw jiraResponseError("Expected array response from Tempo GET /worklogs", body);
+    }
+
+    return body as TempoWorklogListItem[];
   }
 
   // ---------------------------------------------------------------------------

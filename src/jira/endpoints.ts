@@ -15,6 +15,18 @@ export function issueUrl(baseUrl: string, issueKey: string): string {
   return `${baseUrl}${API_BASE}/issue/${encodeURIComponent(issueKey)}`;
 }
 
+export function issueTransitionsUrl(baseUrl: string, issueKey: string): string {
+  return `${issueUrl(baseUrl, issueKey)}/transitions`;
+}
+
+export function issueCommentUrl(baseUrl: string, issueKey: string): string {
+  return `${issueUrl(baseUrl, issueKey)}/comment`;
+}
+
+export function issueAssignUrl(baseUrl: string, issueKey: string): string {
+  return `${issueUrl(baseUrl, issueKey)}/assignee`;
+}
+
 /**
  * URL for the create-issue endpoint.
  */
@@ -41,6 +53,14 @@ export function myselfUrl(baseUrl: string): string {
  */
 export function tempoCreateWorklogUrl(baseUrl: string): string {
   return `${baseUrl}${TEMPO_API_BASE}/worklogs`;
+}
+
+export function tempoWorklogsUrl(baseUrl: string): string {
+  return `${baseUrl}${TEMPO_API_BASE}/worklogs`;
+}
+
+export function issueLinkUrl(baseUrl: string): string {
+  return `${baseUrl}${API_BASE}/issueLink`;
 }
 
 import { CUSTOM_FIELD } from "./constants.js";

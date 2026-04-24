@@ -242,6 +242,87 @@ describe("tool auth failure — isError response", () => {
     expect(result.content[0].text).toContain("AUTH_REQUIRED");
   });
 
+  it("jira_add_comment returns isError:true when session is missing", async () => {
+    const { handleAddComment } = await import("../tools/add-comment.js");
+    const result = await handleAddComment(
+      { issueKey: "PROJ-1", body: "test comment" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_transition_issue returns isError:true when session is missing", async () => {
+    const { handleTransitionIssue } = await import("../tools/transition-issue.js");
+    const result = await handleTransitionIssue(
+      { issueKey: "PROJ-1", transitionId: "11" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_update_issue_fields returns isError:true when session is missing", async () => {
+    const { handleUpdateIssueFields } = await import("../tools/update-issue-fields.js");
+    const result = await handleUpdateIssueFields(
+      { issueKey: "PROJ-1", fields: { summary: "Updated" } },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_link_issues returns isError:true when session is missing", async () => {
+    const { handleLinkIssues } = await import("../tools/link-issues.js");
+    const result = await handleLinkIssues(
+      {
+        inwardIssueKey: "PROJ-1",
+        outwardIssueKey: "PROJ-2",
+        linkType: "Blocks",
+      },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_assign_issue returns isError:true when session is missing", async () => {
+    const { handleAssignIssue } = await import("../tools/assign-issue.js");
+    const result = await handleAssignIssue(
+      { issueKey: "PROJ-1", assigneeName: "alice" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_transitions returns isError:true when session is missing", async () => {
+    const { handleGetTransitions } = await import("../tools/get-transitions.js");
+    const result = await handleGetTransitions(
+      { issueKey: "PROJ-1" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_my_worklogs returns isError:true when session is missing", async () => {
+    const { handleGetMyWorklogs } = await import("../tools/get-my-worklogs.js");
+    const result = await handleGetMyWorklogs(
+      { dateFrom: "2026-04-01", dateTo: "2026-04-30" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
   it("jira_get_issue with invalid key format returns isError:true", async () => {
     const { handleGetIssue } = await import("../tools/get-issue.js");
     const result = await handleGetIssue({ issueKey: "not-valid-key" }, MOCK_CONFIG as never);
