@@ -248,6 +248,15 @@ export interface JiraEditMetaResult {
   fields: JiraEditMetaField[];
 }
 
+/** Single comment entry from GET /rest/api/2/issue/{key}/comment */
+export interface JiraComment {
+  id: string;
+  author: string | null;
+  body: string | null;
+  created: string;
+  updated: string;
+}
+
 export interface JiraCommentResult {
   id: string;
   issueKey: string;
@@ -256,6 +265,52 @@ export interface JiraCommentResult {
 
 export interface JiraIssueLinkResult {
   linkId: string;
+}
+
+export type JiraIssueLinkDirection = "inward" | "outward";
+
+export interface JiraIssueLinkItem {
+  id: string;
+  type: string;
+  direction: JiraIssueLinkDirection;
+  relationship: string;
+  issueKey: string;
+  summary: string;
+  status: string;
+  issueType: string;
+  url: string;
+}
+
+export interface JiraIssueLinksResult {
+  issueKey: string;
+  links: JiraIssueLinkItem[];
+}
+
+export interface JiraSubtaskItem {
+  key: string;
+  summary: string;
+  status: string;
+  issueType: string;
+  assignee: string | null;
+  priority: string | null;
+  url: string;
+}
+
+export interface JiraSubtasksResult {
+  issueKey: string;
+  subtasks: JiraSubtaskItem[];
+}
+
+export interface JiraSubtaskInput {
+  parentIssueKey: string;
+  issueTypeId: string;
+  fields: Record<string, unknown>;
+}
+
+export interface JiraCloneIssueInput {
+  sourceIssueKey: string;
+  summaryPrefix?: string;
+  fields?: Record<string, unknown>;
 }
 
 export interface JiraAttachmentUploadResult {
@@ -359,4 +414,3 @@ export interface TempoWorklogListItem {
   process: string | null;
   typeOfWork: string | null;
 }
-

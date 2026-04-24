@@ -19,14 +19,24 @@ import { handleGetComponents } from "../tools/get-components.js";
 import { handleGetCreateMeta } from "../tools/get-create-meta.js";
 import { handleGetEditMeta } from "../tools/get-edit-meta.js";
 import { handleGetMyWorklogs } from "../tools/get-my-worklogs.js";
+import { handleGetIssueLinks } from "../tools/get-issue-links.js";
+import { handleGetSubtasks } from "../tools/get-subtasks.js";
 import { handleGetPriorities } from "../tools/get-priorities.js";
 import { handleGetProjects } from "../tools/get-projects.js";
 import { handleGetTransitions } from "../tools/get-transitions.js";
 import { handleLinkIssues } from "../tools/link-issues.js";
 import { handleTransitionIssue } from "../tools/transition-issue.js";
+import { handleBulkLinkIssues } from "../tools/bulk-link-issues.js";
+import { handleBulkTransitionIssues } from "../tools/bulk-transition-issues.js";
+import { handleBulkUpdateIssueFields } from "../tools/bulk-update-issue-fields.js";
+import { handleCloneIssue } from "../tools/clone-issue.js";
+import { handleCreateSubtask } from "../tools/create-subtask.js";
+import { handleGetAuditContext } from "../tools/get-audit-context.js";
+import { handlePreviewCreateIssue } from "../tools/preview-create-issue.js";
 import { handleUpdateComment } from "../tools/update-comment.js";
 import { handleUpdateIssueFields } from "../tools/update-issue-fields.js";
 import { handleUpdateWorklog } from "../tools/update-worklog.js";
+import { handleValidateIssueUpdate } from "../tools/validate-issue-update.js";
 import {
   buildUpdateIssuePayload,
   UPDATEABLE_FIELDS,
@@ -306,6 +316,256 @@ describe("transition/comment tool handlers", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("Link created");
+  });
+
+  it("formats issue links and subtasks results", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getIssueLinks").mockResolvedValue({
+      issueKey: "DNIEM-42",
+      links: [
+        {
+          id: "90001",
+          type: "Blocks",
+          direction: "outward",
+          relationship: "blocks",
+          issueKey: "DNIEM-43",
+          summary: "Blocked task",
+          status: "Open",
+          issueType: "Task",
+          url: "https://jira.example.com/browse/DNIEM-43",
+        },
+      ],
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getSubtasks").mockResolvedValue({
+      issueKey: "DNIEM-42",
+      subtasks: [
+        {
+          key: "DNIEM-44",
+          summary: "Subtask",
+          status: "Open",
+          issueType: "Sub-task",
+          assignee: "Alice",
+          priority: "Medium",
+          url: "https://jira.example.com/browse/DNIEM-44",
+        },
+      ],
+    });
+
+    const linksResult = await handleGetIssueLinks({ issueKey: "DNIEM-42" }, mockConfig as never);
+    const subtasksResult = await handleGetSubtasks({ issueKey: "DNIEM-42" }, mockConfig as never);
+
+    expect(linksResult.isError).toBeUndefined();
+    expect(linksResult.content[0].text).toContain("Blocked task");
+    expect(subtasksResult.isError).toBeUndefined();
+    expect(subtasksResult.content[0].text).toContain("Subtask");
+  });
+
+  it("formats create subtask and clone issue results", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "createSubtask").mockResolvedValue({
+      id: "10002",
+      key: "DNIEM-44",
+      url: "https://jira.example.com/browse/DNIEM-44",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "cloneIssue").mockResolvedValue({
+      id: "10003",
+      key: "DNIEM-45",
+      url: "https://jira.example.com/browse/DNIEM-45",
+    });
+
+    const subtaskResult = await handleCreateSubtask(
+      {
+        parentIssueKey: "DNIEM-42",
+        issueTypeId: "10003",
+        fields: { project: { key: "DNIEM" }, summary: "Subtask" },
+      },
+      mockConfig as never
+    );
+    const cloneResult = await handleCloneIssue(
+      { sourceIssueKey: "DNIEM-42", summaryPrefix: "Clone of" },
+      mockConfig as never
+    );
+
+    expect(subtaskResult.isError).toBeUndefined();
+    expect(subtaskResult.content[0].text).toContain("Subtask created");
+    expect(cloneResult.isError).toBeUndefined();
+    expect(cloneResult.content[0].text).toContain("Issue cloned");
+  });
+
+  it("formats bulk link results with per-link status", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "linkIssues").mockResolvedValue({ linkId: "20001" });
+
+    const result = await handleBulkLinkIssues(
+      {
+        links: [
+          {
+            inwardIssueKey: "DNIEM-42",
+            outwardIssueKey: "DNIEM-43",
+            linkType: "Blocks",
+          },
+        ],
+      },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Bulk link complete");
+    expect(result.content[0].text).toContain("20001");
+  });
+
+  it("previews create issue payload without calling Jira", async () => {
+    const result = await handlePreviewCreateIssue({
+      issueTypeId: ISSUE_TYPE.TASK,
+      fields: {
+        [FIELD.PROJECT]: { key: "DNIEM" },
+        [FIELD.SUMMARY]: "Preview task",
+        [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
+        [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
+        [FIELD.DUE_DATE]: "2026-04-30",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Create issue preview");
+    expect(result.content[0].text).toContain("Preview task");
+  });
+
+  it("validates issue update fields against live edit meta", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getEditMeta").mockResolvedValue({
+      issueKey: "DNIEM-42",
+      fields: [
+        {
+          id: FIELD.SUMMARY,
+          name: "Summary",
+          required: false,
+          schemaType: "string",
+          allowedValues: [],
+        },
+      ],
+    });
+
+    const result = await handleValidateIssueUpdate(
+      { issueKey: "DNIEM-42", fields: { [FIELD.SUMMARY]: "Updated" } },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("VALID");
+    expect(result.content[0].text).toContain(FIELD.SUMMARY);
+  });
+
+  it("runs bulk update in dry-run mode without updating Jira", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    const updateSpy = vi.spyOn(JiraHttpClient.prototype, "updateIssueFields").mockResolvedValue(undefined);
+
+    const result = await handleBulkUpdateIssueFields(
+      {
+        dryRun: true,
+        issues: [
+          { issueKey: "DNIEM-42", fields: { [FIELD.SUMMARY]: "Updated summary" } },
+        ],
+      },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("DRY_RUN");
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("runs bulk transitions with transitionName resolution in dry-run mode", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getTransitions").mockResolvedValue([
+      { id: "31", name: "Done", toStatus: "Done" },
+    ]);
+    const transitionSpy = vi.spyOn(JiraHttpClient.prototype, "transitionIssue").mockResolvedValue(undefined);
+
+    const result = await handleBulkTransitionIssues(
+      {
+        dryRun: true,
+        issues: [{ issueKey: "DNIEM-42", transitionName: "Done" }],
+      },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("DRY_RUN");
+    expect(result.content[0].text).toContain("31");
+    expect(transitionSpy).not.toHaveBeenCalled();
+  });
+
+  it("formats audit context from issue, links, subtasks, and comments", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getIssue").mockResolvedValue({
+      key: "DNIEM-42",
+      summary: "Audit target",
+      url: "https://jira.example.com/browse/DNIEM-42",
+      issueType: "Task",
+      status: "Open",
+      resolution: null,
+      priority: "Medium",
+      labels: [],
+      components: [],
+      affectsVersions: [],
+      fixVersions: [],
+      assignee: "Alice",
+      reporter: "Bob",
+      defectOwner: null,
+      created: "2026-04-24",
+      updated: "2026-04-24",
+      dueDate: null,
+      planStartDate: null,
+      actualStartDate: null,
+      actualEndDate: null,
+      timeTracking: { originalEstimate: null, remainingEstimate: null, timeSpent: null },
+      epicLink: null,
+      epicName: null,
+      parent: null,
+      subtasks: [],
+      projectStages: null,
+      defectType: null,
+      defectOrigin: null,
+      causeCategory: null,
+      severity: null,
+      degrade: null,
+      impactAssessment: null,
+      causeAnalysis: null,
+      action: null,
+      dod: null,
+      attachments: [],
+      description: "Description",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getIssueLinks").mockResolvedValue({ issueKey: "DNIEM-42", links: [] });
+    vi.spyOn(JiraHttpClient.prototype, "getSubtasks").mockResolvedValue({ issueKey: "DNIEM-42", subtasks: [] });
+    vi.spyOn(JiraHttpClient.prototype, "getComments").mockResolvedValue([
+      { id: "10001", author: "Alice", body: "Comment", created: "2026-04-24", updated: "2026-04-24" },
+    ]);
+
+    const result = await handleGetAuditContext(
+      { issueKey: "DNIEM-42", includeComments: true },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Audit Context");
+    expect(result.content[0].text).toContain("Audit target");
+    expect(result.content[0].text).toContain("Comment");
   });
 
   it("formats assign issue results", async () => {

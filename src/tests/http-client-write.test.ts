@@ -205,6 +205,147 @@ describe("JiraHttpClient write helpers", () => {
     ).resolves.toEqual({ linkId: "20001" });
   });
 
+  it("returns issue links with direction and linked issue details", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.get).mockResolvedValue({
+      status: 200,
+      data: {
+        key: "DNIEM-42",
+        fields: {
+          issuelinks: [
+            {
+              id: "90001",
+              type: { name: "Blocks", inward: "is blocked by", outward: "blocks" },
+              outwardIssue: {
+                key: "DNIEM-43",
+                fields: {
+                  summary: "Blocked task",
+                  status: { name: "Open" },
+                  issuetype: { name: "Task" },
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    await expect(client.getIssueLinks("DNIEM-42")).resolves.toEqual({
+      issueKey: "DNIEM-42",
+      links: [
+        {
+          id: "90001",
+          type: "Blocks",
+          direction: "outward",
+          relationship: "blocks",
+          issueKey: "DNIEM-43",
+          summary: "Blocked task",
+          status: "Open",
+          issueType: "Task",
+          url: `${BASE_URL}/browse/DNIEM-43`,
+        },
+      ],
+    });
+  });
+
+  it("returns subtasks for an issue", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 200,
+      data: {
+        issues: [
+          {
+            key: "DNIEM-44",
+            fields: {
+              summary: "Implement unit tests",
+              status: { name: "In Progress" },
+              issuetype: { name: "Sub-task" },
+              assignee: { displayName: "Alice" },
+              priority: { name: "Medium" },
+            },
+          },
+        ],
+      },
+    });
+
+    await expect(client.getSubtasks("DNIEM-42")).resolves.toEqual({
+      issueKey: "DNIEM-42",
+      subtasks: [
+        {
+          key: "DNIEM-44",
+          summary: "Implement unit tests",
+          status: "In Progress",
+          issueType: "Sub-task",
+          assignee: "Alice",
+          priority: "Medium",
+          url: `${BASE_URL}/browse/DNIEM-44`,
+        },
+      ],
+    });
+  });
+
+  it("creates a subtask with parent and explicit issue type", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 201,
+      data: { id: "10002", key: "DNIEM-44" },
+    });
+
+    await expect(
+      client.createSubtask({
+        parentIssueKey: "DNIEM-42",
+        issueTypeId: "10003",
+        fields: { project: { key: "DNIEM" }, summary: "Subtask" },
+      })
+    ).resolves.toEqual({
+      id: "10002",
+      key: "DNIEM-44",
+      url: `${BASE_URL}/browse/DNIEM-44`,
+    });
+  });
+
+  it("clones an issue from core source fields with summary prefix", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.get).mockResolvedValue({
+      status: 200,
+      data: {
+        fields: {
+          project: { key: "DNIEM" },
+          issuetype: { id: "10000" },
+          summary: "Original task",
+          labels: ["agent"],
+        },
+      },
+    });
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 201,
+      data: { id: "10003", key: "DNIEM-45" },
+    });
+
+    await expect(
+      client.cloneIssue({ sourceIssueKey: "DNIEM-42", summaryPrefix: "Clone of" })
+    ).resolves.toEqual({
+      id: "10003",
+      key: "DNIEM-45",
+      url: `${BASE_URL}/browse/DNIEM-45`,
+    });
+    expect(mockedInstance.post).toHaveBeenCalledWith(
+      `${BASE_URL}/rest/api/2/issue`,
+      {
+        fields: {
+          project: { key: "DNIEM" },
+          issuetype: { id: "10000" },
+          summary: "Clone of Original task",
+          labels: ["agent"],
+        },
+      }
+    );
+  });
+
   it("assigns an issue to a user", async () => {
     const client = new JiraHttpClient(BASE_URL, cookies);
     const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;

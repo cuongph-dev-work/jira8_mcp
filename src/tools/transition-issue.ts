@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { loadAndValidateSession } from "../auth/session-manager.js";
 import { isMcpError } from "../errors.js";
-import { normalizeAdfValue } from "../jira/adf.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import {
   assertSingleTransitionSelector,
@@ -18,7 +17,7 @@ export const transitionIssueSchema = z.object({
     .regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key (e.g. PROJ-123)"),
   transitionId: z.string().min(1).optional(),
   transitionName: z.string().min(1).optional(),
-  comment: z.union([z.string(), z.record(z.unknown())]).optional(),
+  comment: z.string().optional(),
   fields: z.record(z.unknown()).optional(),
 });
 
@@ -78,7 +77,7 @@ export async function handleTransitionIssue(
 
     if (parsed.data.comment !== undefined) {
       payload.update = {
-        comment: [{ add: { body: normalizeAdfValue(parsed.data.comment) } }],
+        comment: [{ add: { body: parsed.data.comment } }],
       };
     }
 

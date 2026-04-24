@@ -83,6 +83,10 @@ export function issueLinkUrl(baseUrl: string): string {
   return `${baseUrl}${API_BASE}/issueLink`;
 }
 
+export function issueLinkByIdUrl(baseUrl: string, linkId: string): string {
+  return `${issueLinkUrl(baseUrl)}/${encodeURIComponent(linkId)}`;
+}
+
 export function projectsUrl(baseUrl: string): string {
   return `${baseUrl}${API_BASE}/project`;
 }

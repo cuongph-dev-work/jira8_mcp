@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { loadAndValidateSession } from "../auth/session-manager.js";
 import { isMcpError } from "../errors.js";
-import { normalizeAdfValue } from "../jira/adf.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import type { Config } from "../config.js";
 
@@ -9,7 +8,7 @@ export const linkIssuesSchema = z.object({
   inwardIssueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "inwardIssueKey must be a valid Jira key"),
   outwardIssueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "outwardIssueKey must be a valid Jira key"),
   linkType: z.string().min(1, "linkType is required"),
-  comment: z.union([z.string(), z.record(z.unknown())]).optional(),
+  comment: z.string().optional(),
 });
 
 export async function handleLinkIssues(
@@ -48,7 +47,7 @@ export async function handleLinkIssues(
       outwardIssue: { key: parsed.data.outwardIssueKey },
     };
     if (parsed.data.comment !== undefined) {
-      payload.comment = { body: normalizeAdfValue(parsed.data.comment) };
+      payload.comment = { body: parsed.data.comment };
     }
 
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);

@@ -30,6 +30,8 @@ import { normalizeUserSearchResponse } from "./user-search.js";
 import { jiraHttpError, jiraResponseError, sessionExpired } from "../errors.js";
 import type {
   JiraAttachmentUploadResult,
+  JiraCloneIssueInput,
+  JiraComment,
   JiraCommentResult,
   JiraCreatedIssueTransportResult,
   JiraCurrentUser,
@@ -37,10 +39,13 @@ import type {
   JiraEditMetaResult,
   JiraIssue,
   JiraIssueLinkResult,
+  JiraIssueLinksResult,
   JiraIssueTransition,
   JiraPriority,
   JiraProject,
   JiraSearchResult,
+  JiraSubtaskInput,
+  JiraSubtasksResult,
   JiraUserSearchResult,
   SessionCookies,
   TempoWorklogInput,
@@ -208,6 +213,30 @@ export class JiraHttpClient {
     this.assertOk(res.status, url, res.data);
   }
 
+  async getComments(
+    issueKey: string,
+    maxResults = 50
+  ): Promise<JiraComment[]> {
+    const url = `${issueCommentUrl(this.baseUrl, issueKey)}?maxResults=${maxResults}&orderBy=-created`;
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const data = res.data as { comments?: unknown[] };
+    if (!data || !Array.isArray(data.comments)) {
+      throw jiraResponseError("Unexpected get comments response shape", data);
+    }
+
+    return (data.comments as Array<Record<string, unknown>>).map((raw) => ({
+      id: String(raw.id ?? ""),
+      author: (raw.author as { displayName?: string } | undefined)?.displayName ?? null,
+      body: typeof raw.body === "string" ? raw.body : null,
+      created: String(raw.created ?? ""),
+      updated: String(raw.updated ?? ""),
+    }));
+  }
+
   async addComment(
     issueKey: string,
     payload: { body: unknown }
@@ -286,6 +315,63 @@ export class JiraHttpClient {
     }
 
     return { linkId: body.linkId };
+  }
+
+  async getIssueLinks(issueKey: string): Promise<JiraIssueLinksResult> {
+    const url = issueUrl(this.baseUrl, issueKey);
+    const res = await this.http.get(url, {
+      params: { fields: "issuelinks" },
+    });
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizeIssueLinks(issueKey, res.data, this.baseUrl);
+  }
+
+  async getSubtasks(issueKey: string): Promise<JiraSubtasksResult> {
+    const url = searchUrl(this.baseUrl);
+    const res = await this.http.post(url, {
+      jql: `parent = "${issueKey}" ORDER BY created ASC`,
+      maxResults: 100,
+      fields: ["summary", "status", "issuetype", "assignee", "priority"],
+    });
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const data = res.data as { issues?: unknown[] };
+    if (!data || !Array.isArray(data.issues)) {
+      throw jiraResponseError("Unexpected subtasks search response shape", data);
+    }
+
+    return {
+      issueKey,
+      subtasks: data.issues.map((item) => normalizeSubtask(item, this.baseUrl)),
+    };
+  }
+
+  async createSubtask(input: JiraSubtaskInput): Promise<JiraCreatedIssueTransportResult> {
+    return this.createIssue({
+      fields: {
+        ...input.fields,
+        parent: { key: input.parentIssueKey },
+        issuetype: { id: input.issueTypeId },
+      },
+    });
+  }
+
+  async cloneIssue(input: JiraCloneIssueInput): Promise<JiraCreatedIssueTransportResult> {
+    const source = await this.getCloneSource(input.sourceIssueKey);
+    const summaryPrefix = input.summaryPrefix ?? "Clone of";
+
+    return this.createIssue({
+      fields: {
+        ...source.fields,
+        summary: `${summaryPrefix} ${source.summary}`,
+        ...(input.fields ?? {}),
+      },
+    });
   }
 
   async assignIssue(
@@ -502,6 +588,33 @@ export class JiraHttpClient {
     return body as TempoWorklogResult[];
   }
 
+  private async getCloneSource(issueKey: string): Promise<{
+    summary: string;
+    fields: Record<string, unknown>;
+  }> {
+    const url = issueUrl(this.baseUrl, issueKey);
+    const fields = [
+      "project",
+      "issuetype",
+      "summary",
+      "description",
+      "priority",
+      "components",
+      "labels",
+      "duedate",
+      "fixVersions",
+      "versions",
+    ];
+    const res = await this.http.get(url, {
+      params: { fields: fields.join(",") },
+    });
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizeCloneSource(res.data);
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
@@ -638,4 +751,125 @@ function normalizePriorities(raw: unknown): JiraPriority[] {
       iconUrl: typeof record.iconUrl === "string" ? record.iconUrl : null,
     };
   });
+}
+
+function normalizeIssueLinks(
+  issueKey: string,
+  raw: unknown,
+  baseUrl: string
+): JiraIssueLinksResult {
+  const body = raw as { fields?: { issuelinks?: unknown } };
+  const links = body.fields?.issuelinks;
+  if (!Array.isArray(links)) {
+    throw jiraResponseError("Unexpected issue links response shape", raw);
+  }
+
+  return {
+    issueKey,
+    links: links.map((link) => normalizeIssueLink(link, baseUrl)),
+  };
+}
+
+function normalizeIssueLink(raw: unknown, baseUrl: string) {
+  const link = raw as {
+    id?: unknown;
+    type?: { name?: unknown; inward?: unknown; outward?: unknown };
+    inwardIssue?: unknown;
+    outwardIssue?: unknown;
+  };
+  const isInward = link.inwardIssue != null;
+  const linkedIssue = isInward ? link.inwardIssue : link.outwardIssue;
+  const issue = linkedIssue as {
+    key?: unknown;
+    fields?: {
+      summary?: unknown;
+      status?: { name?: unknown };
+      issuetype?: { name?: unknown };
+    };
+  };
+
+  if (typeof link.id !== "string" || typeof issue?.key !== "string") {
+    throw jiraResponseError("Unexpected issue link response item shape", raw);
+  }
+
+  return {
+    id: link.id,
+    type: typeof link.type?.name === "string" ? link.type.name : "Unknown",
+    direction: isInward ? ("inward" as const) : ("outward" as const),
+    relationship:
+      isInward && typeof link.type?.inward === "string"
+        ? link.type.inward
+        : !isInward && typeof link.type?.outward === "string"
+          ? link.type.outward
+          : "linked",
+    issueKey: issue.key,
+    summary: typeof issue.fields?.summary === "string" ? issue.fields.summary : "",
+    status: typeof issue.fields?.status?.name === "string" ? issue.fields.status.name : "",
+    issueType: typeof issue.fields?.issuetype?.name === "string" ? issue.fields.issuetype.name : "",
+    url: `${baseUrl}/browse/${issue.key}`,
+  };
+}
+
+function normalizeSubtasks(issueKey: string, raw: unknown, baseUrl: string): JiraSubtasksResult {
+  const body = raw as { fields?: { subtasks?: unknown } };
+  const subtasks = body.fields?.subtasks;
+  if (!Array.isArray(subtasks)) {
+    throw jiraResponseError("Unexpected subtasks response shape", raw);
+  }
+
+  return {
+    issueKey,
+    subtasks: subtasks.map((subtask) => normalizeSubtask(subtask, baseUrl)),
+  };
+}
+
+function normalizeSubtask(raw: unknown, baseUrl: string) {
+  const subtask = raw as {
+    key?: unknown;
+    fields?: {
+      summary?: unknown;
+      status?: { name?: unknown };
+      issuetype?: { name?: unknown };
+      assignee?: { displayName?: unknown } | null;
+      priority?: { name?: unknown } | null;
+    };
+  };
+
+  if (typeof subtask.key !== "string") {
+    throw jiraResponseError("Unexpected subtask response item shape", raw);
+  }
+
+  return {
+    key: subtask.key,
+    summary: typeof subtask.fields?.summary === "string" ? subtask.fields.summary : "",
+    status: typeof subtask.fields?.status?.name === "string" ? subtask.fields.status.name : "",
+    issueType:
+      typeof subtask.fields?.issuetype?.name === "string" ? subtask.fields.issuetype.name : "",
+    assignee:
+      typeof subtask.fields?.assignee?.displayName === "string"
+        ? subtask.fields.assignee.displayName
+        : null,
+    priority:
+      typeof subtask.fields?.priority?.name === "string" ? subtask.fields.priority.name : null,
+    url: `${baseUrl}/browse/${subtask.key}`,
+  };
+}
+
+function normalizeCloneSource(raw: unknown): { summary: string; fields: Record<string, unknown> } {
+  const body = raw as { fields?: Record<string, unknown> };
+  if (!body.fields || typeof body.fields !== "object") {
+    throw jiraResponseError("Unexpected clone source response shape", raw);
+  }
+
+  const fields = { ...body.fields };
+  const summary = typeof fields.summary === "string" ? fields.summary : "";
+
+  delete fields.attachment;
+  delete fields.comment;
+  delete fields.issuelinks;
+  delete fields.subtasks;
+  delete fields.status;
+  delete fields.resolution;
+
+  return { summary, fields };
 }

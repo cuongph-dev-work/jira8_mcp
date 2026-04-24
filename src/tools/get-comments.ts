@@ -4,17 +4,19 @@ import { isMcpError } from "../errors.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import type { Config } from "../config.js";
 
-export const updateCommentSchema = z.object({
-  issueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key"),
-  commentId: z.string().min(1, "commentId is required"),
-  body: z.string(),
+export const getCommentsSchema = z.object({
+  issueKey: z
+    .string()
+    .min(1, "issueKey is required")
+    .regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key (e.g. PROJ-123)"),
+  maxResults: z.number().int().min(1).max(100).optional().default(20),
 });
 
-export async function handleUpdateComment(
+export async function handleGetComments(
   rawInput: unknown,
   cfg: Config
 ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
-  const parsed = updateCommentSchema.safeParse(rawInput);
+  const parsed = getCommentsSchema.safeParse(rawInput);
   if (!parsed.success) {
     const msg = parsed.error.errors.map((e) => e.message).join("; ");
     return errorContent(`Invalid input: ${msg}`);
@@ -34,26 +36,28 @@ export async function handleUpdateComment(
 
   try {
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const comment = await client.updateComment(parsed.data.issueKey, parsed.data.commentId, {
-      body: parsed.data.body,
-    });
+    const comments = await client.getComments(parsed.data.issueKey, parsed.data.maxResults);
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: [
-            `✅ **Comment updated**`,
-            "",
-            `| Field | Value |`,
-            `|---|---|`,
-            `| **Issue** | ${comment.issueKey} |`,
-            `| **Comment ID** | ${comment.id} |`,
-            `| **URL** | ${comment.url} |`,
-          ].join("\n"),
-        },
-      ],
-    };
+    const lines = [
+      `# Comments — ${parsed.data.issueKey}`,
+      "",
+      `**Total:** ${comments.length}`,
+      "",
+    ];
+
+    if (comments.length === 0) {
+      lines.push("_No comments found._");
+    } else {
+      for (const c of comments) {
+        lines.push(`---`);
+        lines.push(`**Comment #${c.id}** by **${c.author ?? "Unknown"}** — ${c.created}`);
+        lines.push("");
+        lines.push(c.body ?? "_empty_");
+        lines.push("");
+      }
+    }
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   } catch (err: unknown) {
     if (isMcpError(err)) return errorContent(`[${err.code}] ${err.message}`);
     if (err instanceof Error) return errorContent(err.message);

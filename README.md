@@ -25,7 +25,14 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 - 🧭 `jira_get_create_meta` — inspect static create metadata from `src/jira/constants.ts`
 - 🧭 `jira_get_edit_meta` — inspect live editable fields for one issue
 - ✏️ `jira_update_issue_fields` — update a curated set of Jira fields safely
+- 🛡️ `jira_validate_issue_update` — validate update payloads without writing
+- 🛡️ `jira_bulk_update_issue_fields` / `jira_bulk_transition_issues` — bulk operations with explicit `dryRun`
+- 🛡️ `jira_preview_create_issue` — build create payloads without POSTing
+- 🧾 `jira_get_audit_context` — compact issue audit context for LLM review
 - 🔗 `jira_link_issues` — create links between issues
+- 🔗 `jira_get_issue_links` / `jira_bulk_link_issues` — inspect or create multiple issue links
+- 🧩 `jira_get_subtasks` / `jira_create_subtask` — inspect or create sub-tasks
+- 🧬 `jira_clone_issue` — clone an issue with optional field overrides
 - 👤 `jira_assign_issue` — assign issues by name or key
 - 👥 `jira_find_user` — search Jira users for assignment/collaboration flows
 - 📋 `jira_get_transitions` — list currently available transitions for an issue
@@ -236,6 +243,77 @@ Update a curated set of fields on an existing issue.
 
 ---
 
+### `jira_validate_issue_update`
+
+Validate an issue update without writing.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+| `fields` | `object` | Curated update fields to validate |
+
+**Output:** Validation status, normalized update payload, and any fields not editable according to live edit metadata.
+
+---
+
+### `jira_bulk_update_issue_fields`
+
+Update fields on multiple issues with explicit dry-run control.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `dryRun` | `boolean` | Required. `true` previews only; `false` applies updates |
+| `issues` | `array` | 1-25 items with `issueKey` and `fields` |
+
+**Output:** Per-issue status table. Later items continue after per-issue failures.
+
+---
+
+### `jira_bulk_transition_issues`
+
+Transition multiple issues with explicit dry-run control.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `dryRun` | `boolean` | Required. `true` resolves/previews only; `false` applies transitions |
+| `issues` | `array` | 1-25 items with `issueKey`, exactly one of `transitionId`/`transitionName`, optional `comment` and `fields` |
+
+**Output:** Per-issue status table with resolved transition ids. Later items continue after per-issue failures.
+
+---
+
+### `jira_preview_create_issue`
+
+Build and validate a create issue payload without sending it to Jira.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueTypeId` | `string` | Jira issue type ID from `src/jira/constants.ts` |
+| `fields` | `object` | Jira create fields keyed by standard field names or `customfield_*` IDs |
+
+**Output:** Normalized Jira create payload JSON.
+
+---
+
+### `jira_get_audit_context`
+
+Fetch compact context for LLM review of one issue.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+| `includeComments` | `boolean` | Include recent comments, default true |
+| `maxComments` | `number` | Max comments, 1-100, default 20 |
+
+**Output:** Issue summary, key fields, description, issue links, subtasks, and optional comments.
+
+---
+
 ### `jira_link_issues`
 
 Create a Jira issue link between two issues.
@@ -249,6 +327,75 @@ Create a Jira issue link between two issues.
 | `comment` | `string \| object` | Optional plain text or ADF comment |
 
 **Output:** Confirmation with issue keys, link type, and link id.
+
+---
+
+### `jira_get_issue_links`
+
+List issue links for a Jira issue.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+
+**Output:** Link direction, type, relationship, linked issue key, summary, and status.
+
+---
+
+### `jira_get_subtasks`
+
+List subtasks for a Jira issue.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Parent Jira issue key |
+
+**Output:** Subtask key, summary, status, assignee, priority, and URL.
+
+---
+
+### `jira_create_subtask`
+
+Create a subtask under a parent issue.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `parentIssueKey` | `string` | Parent Jira issue key |
+| `issueTypeId` | `string` | Jira subtask issue type id for the project |
+| `fields` | `object` | Jira create fields; `parent` and `issuetype` are injected |
+
+**Output:** Confirmation with parent key, created subtask key, and browser URL.
+
+---
+
+### `jira_clone_issue`
+
+Clone an issue by copying core fields.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `sourceIssueKey` | `string` | Source Jira issue key |
+| `summaryPrefix` | `string` | Optional prefix, default `Clone of` |
+| `fields` | `object` | Optional field overrides for the created issue |
+
+**Output:** Confirmation with source key, cloned issue key, and browser URL.
+
+---
+
+### `jira_bulk_link_issues`
+
+Create multiple issue links sequentially.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `links` | `array` | 1-25 link requests with `inwardIssueKey`, `outwardIssueKey`, `linkType`, optional `comment` |
+
+**Output:** Per-link status table. If one link fails, later links are still attempted and the MCP result is marked as an error.
 
 ---
 
@@ -439,7 +586,12 @@ src/
 ├── tools/
 │   ├── add-attachment.ts  # jira_add_attachment handler
 │   ├── add-comment.ts     # jira_add_comment handler
+│   ├── bulk-link-issues.ts # jira_bulk_link_issues handler
+│   ├── clone-issue.ts     # jira_clone_issue handler
+│   ├── create-subtask.ts  # jira_create_subtask handler
 │   ├── get-issue.ts       # jira_get_issue handler
+│   ├── get-issue-links.ts # jira_get_issue_links handler
+│   ├── get-subtasks.ts    # jira_get_subtasks handler
 │   ├── find-user.ts       # jira_find_user handler
 │   ├── get-components.ts  # jira_get_components handler
 │   ├── get-create-meta.ts # jira_get_create_meta handler

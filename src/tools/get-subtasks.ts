@@ -4,17 +4,15 @@ import { isMcpError } from "../errors.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import type { Config } from "../config.js";
 
-export const updateCommentSchema = z.object({
+export const getSubtasksSchema = z.object({
   issueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key"),
-  commentId: z.string().min(1, "commentId is required"),
-  body: z.string(),
 });
 
-export async function handleUpdateComment(
+export async function handleGetSubtasks(
   rawInput: unknown,
   cfg: Config
 ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
-  const parsed = updateCommentSchema.safeParse(rawInput);
+  const parsed = getSubtasksSchema.safeParse(rawInput);
   if (!parsed.success) {
     const msg = parsed.error.errors.map((e) => e.message).join("; ");
     return errorContent(`Invalid input: ${msg}`);
@@ -34,26 +32,22 @@ export async function handleUpdateComment(
 
   try {
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const comment = await client.updateComment(parsed.data.issueKey, parsed.data.commentId, {
-      body: parsed.data.body,
-    });
+    const result = await client.getSubtasks(parsed.data.issueKey);
+    const lines = [`# Subtasks`, "", `**Issue:** ${result.issueKey}`, ""];
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: [
-            `✅ **Comment updated**`,
-            "",
-            `| Field | Value |`,
-            `|---|---|`,
-            `| **Issue** | ${comment.issueKey} |`,
-            `| **Comment ID** | ${comment.id} |`,
-            `| **URL** | ${comment.url} |`,
-          ].join("\n"),
-        },
-      ],
-    };
+    if (result.subtasks.length === 0) {
+      lines.push("_No subtasks found._");
+    } else {
+      lines.push(`| Key | Summary | Status | Assignee | Priority |`);
+      lines.push(`|---|---|---|---|---|`);
+      for (const subtask of result.subtasks) {
+        lines.push(
+          `| ${subtask.key} | ${subtask.summary} | ${subtask.status} | ${subtask.assignee ?? "—"} | ${subtask.priority ?? "—"} |`
+        );
+      }
+    }
+
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   } catch (err: unknown) {
     if (isMcpError(err)) return errorContent(`[${err.code}] ${err.message}`);
     if (err instanceof Error) return errorContent(err.message);

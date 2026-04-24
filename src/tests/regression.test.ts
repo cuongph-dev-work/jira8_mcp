@@ -292,6 +292,123 @@ describe("tool auth failure — isError response", () => {
     expect(result.content[0].text).toContain("AUTH_REQUIRED");
   });
 
+  it("jira_get_issue_links returns isError:true when session is missing", async () => {
+    const { handleGetIssueLinks } = await import("../tools/get-issue-links.js");
+    const result = await handleGetIssueLinks(
+      { issueKey: "PROJ-1" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_subtasks returns isError:true when session is missing", async () => {
+    const { handleGetSubtasks } = await import("../tools/get-subtasks.js");
+    const result = await handleGetSubtasks(
+      { issueKey: "PROJ-1" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_create_subtask returns isError:true when session is missing", async () => {
+    const { handleCreateSubtask } = await import("../tools/create-subtask.js");
+    const result = await handleCreateSubtask(
+      {
+        parentIssueKey: "PROJ-1",
+        issueTypeId: "10003",
+        fields: { project: { key: "PROJ" }, summary: "Subtask" },
+      },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_clone_issue returns isError:true when session is missing", async () => {
+    const { handleCloneIssue } = await import("../tools/clone-issue.js");
+    const result = await handleCloneIssue(
+      { sourceIssueKey: "PROJ-1" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_bulk_link_issues returns isError:true when session is missing", async () => {
+    const { handleBulkLinkIssues } = await import("../tools/bulk-link-issues.js");
+    const result = await handleBulkLinkIssues(
+      {
+        links: [
+          {
+            inwardIssueKey: "PROJ-1",
+            outwardIssueKey: "PROJ-2",
+            linkType: "Blocks",
+          },
+        ],
+      },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_validate_issue_update returns isError:true when session is missing", async () => {
+    const { handleValidateIssueUpdate } = await import("../tools/validate-issue-update.js");
+    const result = await handleValidateIssueUpdate(
+      { issueKey: "PROJ-1", fields: { summary: "Updated" } },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_bulk_update_issue_fields returns isError:true when session is missing", async () => {
+    const { handleBulkUpdateIssueFields } = await import("../tools/bulk-update-issue-fields.js");
+    const result = await handleBulkUpdateIssueFields(
+      {
+        dryRun: true,
+        issues: [{ issueKey: "PROJ-1", fields: { summary: "Updated" } }],
+      },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_bulk_transition_issues returns isError:true when session is missing", async () => {
+    const { handleBulkTransitionIssues } = await import("../tools/bulk-transition-issues.js");
+    const result = await handleBulkTransitionIssues(
+      {
+        dryRun: true,
+        issues: [{ issueKey: "PROJ-1", transitionId: "11" }],
+      },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_audit_context returns isError:true when session is missing", async () => {
+    const { handleGetAuditContext } = await import("../tools/get-audit-context.js");
+    const result = await handleGetAuditContext(
+      { issueKey: "PROJ-1" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
   it("jira_assign_issue returns isError:true when session is missing", async () => {
     const { handleAssignIssue } = await import("../tools/assign-issue.js");
     const result = await handleAssignIssue(

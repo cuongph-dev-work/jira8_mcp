@@ -4,19 +4,17 @@ import { isMcpError } from "../errors.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import type { Config } from "../config.js";
 
-export const addCommentSchema = z.object({
-  issueKey: z
-    .string()
-    .min(1, "issueKey is required")
-    .regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key (e.g. PROJ-123)"),
-  body: z.union([z.string(), z.record(z.unknown())]),
+export const cloneIssueSchema = z.object({
+  sourceIssueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "sourceIssueKey must be a valid Jira key"),
+  summaryPrefix: z.string().min(1).optional().default("Clone of"),
+  fields: z.record(z.unknown()).optional().describe("Optional field overrides for the cloned issue."),
 });
 
-export async function handleAddComment(
+export async function handleCloneIssue(
   rawInput: unknown,
   cfg: Config
 ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
-  const parsed = addCommentSchema.safeParse(rawInput);
+  const parsed = cloneIssueSchema.safeParse(rawInput);
   if (!parsed.success) {
     const msg = parsed.error.errors.map((e) => e.message).join("; ");
     return errorContent(`Invalid input: ${msg}`);
@@ -30,38 +28,32 @@ export async function handleAddComment(
       cfg.JIRA_VALIDATE_PATH
     );
   } catch (err: unknown) {
-    if (isMcpError(err)) {
-      return authErrorContent(err.code, err.message);
-    }
+    if (isMcpError(err)) return authErrorContent(err.code, err.message);
     throw err;
   }
 
   try {
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const comment = await client.addComment(parsed.data.issueKey, { body: parsed.data.body });
+    const created = await client.cloneIssue(parsed.data);
     return {
       content: [
         {
           type: "text",
           text: [
-            `✅ **Comment added**`,
+            `✅ **Issue cloned**`,
             "",
             `| Field | Value |`,
             `|---|---|`,
-            `| **Issue** | ${comment.issueKey} |`,
-            `| **Comment ID** | ${comment.id} |`,
-            `| **URL** | ${comment.url} |`,
+            `| **Source** | ${parsed.data.sourceIssueKey} |`,
+            `| **Clone** | ${created.key} |`,
+            `| **URL** | ${created.url} |`,
           ].join("\n"),
         },
       ],
     };
   } catch (err: unknown) {
-    if (isMcpError(err)) {
-      return errorContent(`[${err.code}] ${err.message}`);
-    }
-    if (err instanceof Error) {
-      return errorContent(err.message);
-    }
+    if (isMcpError(err)) return errorContent(`[${err.code}] ${err.message}`);
+    if (err instanceof Error) return errorContent(err.message);
     throw err;
   }
 }
@@ -71,8 +63,5 @@ function errorContent(message: string) {
 }
 
 function authErrorContent(code: string, message: string) {
-  return {
-    isError: true as const,
-    content: [{ type: "text" as const, text: `[${code}] ${message}` }],
-  };
+  return { isError: true as const, content: [{ type: "text" as const, text: `[${code}] ${message}` }] };
 }
