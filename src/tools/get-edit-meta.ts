@@ -2,29 +2,21 @@ import { z } from "zod";
 import { loadAndValidateSession } from "../auth/session-manager.js";
 import { isMcpError } from "../errors.js";
 import { JiraHttpClient } from "../jira/http-client.js";
-import { todayLocalDate } from "../utils.js";
 import type { Config } from "../config.js";
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-
-export const getMyWorklogsSchema = z.object({
-  dateFrom: z.string().regex(DATE_REGEX, "dateFrom must be in yyyy-MM-dd format").optional(),
-  dateTo: z.string().regex(DATE_REGEX, "dateTo must be in yyyy-MM-dd format").optional(),
+export const getEditMetaSchema = z.object({
+  issueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key"),
 });
 
-export async function handleGetMyWorklogs(
+export async function handleGetEditMeta(
   rawInput: unknown,
   cfg: Config
 ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
-  const parsed = getMyWorklogsSchema.safeParse(rawInput);
+  const parsed = getEditMetaSchema.safeParse(rawInput);
   if (!parsed.success) {
     const msg = parsed.error.errors.map((e) => e.message).join("; ");
     return errorContent(`Invalid input: ${msg}`);
   }
-
-  const today = todayLocalDate();
-  const dateFrom = parsed.data.dateFrom ?? today;
-  const dateTo = parsed.data.dateTo ?? today;
 
   let sessionCookies;
   try {
@@ -40,32 +32,22 @@ export async function handleGetMyWorklogs(
 
   try {
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const currentUser = await client.getCurrentUser();
-    const worklogs = await client.getMyWorklogs({
-      workerKey: currentUser.key,
-      dateFrom,
-      dateTo,
-    });
+    const meta = await client.getEditMeta(parsed.data.issueKey);
+    const lines = [`# Editable Fields`, "", `**Issue:** ${meta.issueKey}`, ""];
 
-    const lines = [
-      `# My Tempo Worklogs`,
-      "",
-      `**Worker:** ${currentUser.displayName}`,
-      `**Date From:** ${dateFrom}`,
-      `**Date To:** ${dateTo}`,
-      "",
-    ];
-    if (worklogs.length === 0) {
-      lines.push("_No worklogs found._");
+    if (meta.fields.length === 0) {
+      lines.push("_No editable fields returned by Jira._");
     } else {
-      lines.push(`| Tempo ID | Issue | Date | Time Spent | Process | Type Of Work | Comment |`);
-      lines.push(`|---|---|---|---|---|---|---|`);
-      for (const wl of worklogs) {
-        const issue = wl.issueSummary
-          ? `${wl.issueKey}: ${wl.issueSummary}`
-          : wl.issueKey;
+      lines.push(`| Field ID | Name | Required | Type | Allowed Values |`);
+      lines.push(`|---|---|---|---|---|`);
+      for (const field of meta.fields) {
+        const allowedValues = field.allowedValues
+          .map((value) => value.name ?? value.value ?? value.id ?? "")
+          .filter(Boolean)
+          .slice(0, 10)
+          .join(", ");
         lines.push(
-          `| ${wl.tempoWorklogId} | ${issue} | ${wl.startDate} | ${wl.timeSpent} | ${wl.process ?? "—"} | ${wl.typeOfWork ?? "—"} | ${wl.comment ?? "—"} |`
+          `| ${field.id} | ${field.name} | ${field.required ? "yes" : "no"} | ${field.schemaType ?? "—"} | ${allowedValues || "—"} |`
         );
       }
     }

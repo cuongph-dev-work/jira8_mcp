@@ -2,29 +2,22 @@ import { z } from "zod";
 import { loadAndValidateSession } from "../auth/session-manager.js";
 import { isMcpError } from "../errors.js";
 import { JiraHttpClient } from "../jira/http-client.js";
-import { todayLocalDate } from "../utils.js";
 import type { Config } from "../config.js";
 
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
-
-export const getMyWorklogsSchema = z.object({
-  dateFrom: z.string().regex(DATE_REGEX, "dateFrom must be in yyyy-MM-dd format").optional(),
-  dateTo: z.string().regex(DATE_REGEX, "dateTo must be in yyyy-MM-dd format").optional(),
+export const findUserSchema = z.object({
+  query: z.string().min(1, "query is required"),
+  maxResults: z.number().int().min(1).max(50).optional().default(10),
 });
 
-export async function handleGetMyWorklogs(
+export async function handleFindUser(
   rawInput: unknown,
   cfg: Config
 ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
-  const parsed = getMyWorklogsSchema.safeParse(rawInput);
+  const parsed = findUserSchema.safeParse(rawInput);
   if (!parsed.success) {
     const msg = parsed.error.errors.map((e) => e.message).join("; ");
     return errorContent(`Invalid input: ${msg}`);
   }
-
-  const today = todayLocalDate();
-  const dateFrom = parsed.data.dateFrom ?? today;
-  const dateTo = parsed.data.dateTo ?? today;
 
   let sessionCookies;
   try {
@@ -40,32 +33,17 @@ export async function handleGetMyWorklogs(
 
   try {
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const currentUser = await client.getCurrentUser();
-    const worklogs = await client.getMyWorklogs({
-      workerKey: currentUser.key,
-      dateFrom,
-      dateTo,
-    });
+    const users = await client.findUsers(parsed.data.query, parsed.data.maxResults);
+    const lines = [`# Jira Users`, "", `**Query:** ${parsed.data.query}`, ""];
 
-    const lines = [
-      `# My Tempo Worklogs`,
-      "",
-      `**Worker:** ${currentUser.displayName}`,
-      `**Date From:** ${dateFrom}`,
-      `**Date To:** ${dateTo}`,
-      "",
-    ];
-    if (worklogs.length === 0) {
-      lines.push("_No worklogs found._");
+    if (users.length === 0) {
+      lines.push("_No users found._");
     } else {
-      lines.push(`| Tempo ID | Issue | Date | Time Spent | Process | Type Of Work | Comment |`);
-      lines.push(`|---|---|---|---|---|---|---|`);
-      for (const wl of worklogs) {
-        const issue = wl.issueSummary
-          ? `${wl.issueKey}: ${wl.issueSummary}`
-          : wl.issueKey;
+      lines.push(`| Display Name | Name | Key | Active | Email |`);
+      lines.push(`|---|---|---|---|---|`);
+      for (const user of users) {
         lines.push(
-          `| ${wl.tempoWorklogId} | ${issue} | ${wl.startDate} | ${wl.timeSpent} | ${wl.process ?? "—"} | ${wl.typeOfWork ?? "—"} | ${wl.comment ?? "—"} |`
+          `| ${user.displayName} | ${user.name ?? "—"} | ${user.key ?? "—"} | ${formatNullableBoolean(user.active)} | ${user.emailAddress ?? "—"} |`
         );
       }
     }
@@ -76,6 +54,11 @@ export async function handleGetMyWorklogs(
     if (err instanceof Error) return errorContent(err.message);
     throw err;
   }
+}
+
+function formatNullableBoolean(value: boolean | null): string {
+  if (value === null) return "—";
+  return value ? "yes" : "no";
 }
 
 function errorContent(message: string) {

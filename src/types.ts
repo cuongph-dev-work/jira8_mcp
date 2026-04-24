@@ -221,6 +221,33 @@ export interface JiraIssueTransition {
   toStatus: string | null;
 }
 
+export interface JiraUserSearchResult {
+  key: string | null;
+  name: string | null;
+  displayName: string;
+  emailAddress: string | null;
+  active: boolean | null;
+}
+
+export interface JiraEditMetaAllowedValue {
+  id: string | null;
+  name: string | null;
+  value: string | null;
+}
+
+export interface JiraEditMetaField {
+  id: string;
+  name: string;
+  required: boolean;
+  schemaType: string | null;
+  allowedValues: JiraEditMetaAllowedValue[];
+}
+
+export interface JiraEditMetaResult {
+  issueKey: string;
+  fields: JiraEditMetaField[];
+}
+
 export interface JiraCommentResult {
   id: string;
   issueKey: string;
@@ -229,6 +256,34 @@ export interface JiraCommentResult {
 
 export interface JiraIssueLinkResult {
   linkId: string;
+}
+
+export interface JiraAttachmentUploadResult {
+  id: string;
+  filename: string;
+  size: number;
+  mimeType: string | null;
+  url: string | null;
+}
+
+export interface JiraProject {
+  id: string | null;
+  key: string;
+  name: string;
+  url: string | null;
+}
+
+export interface JiraComponent {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+export interface JiraPriority {
+  id: string;
+  name: string;
+  description: string | null;
+  iconUrl: string | null;
 }
 
 /** Minimal shape returned by GET /rest/api/2/myself */
@@ -288,11 +343,20 @@ export interface TempoWorklogResult {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Normalized Tempo types (used by tool handlers)
+// Raw API response types are in src/types/jira-api.ts
+// ---------------------------------------------------------------------------
+
 export interface TempoWorklogListItem {
   tempoWorklogId: number;
   issueKey: string;
+  issueSummary: string | null;
   timeSpent: string;
   timeSpentSeconds: number;
   startDate: string;
   comment: string | null;
+  process: string | null;
+  typeOfWork: string | null;
 }
+

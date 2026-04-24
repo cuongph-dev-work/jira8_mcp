@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import axios from "axios";
 import { JiraHttpClient } from "../jira/http-client.js";
@@ -13,6 +16,7 @@ vi.mock("axios", async () => {
         get: vi.fn(),
         post: vi.fn(),
         put: vi.fn(),
+        delete: vi.fn(),
       })),
     },
   };
@@ -43,6 +47,66 @@ describe("JiraHttpClient write helpers", () => {
       { id: "11", name: "Start Progress", toStatus: "In Progress" },
       { id: "21", name: "Resolve", toStatus: "Resolved" },
     ]);
+  });
+
+  it("finds users with normalized identity fields", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.get).mockResolvedValue({
+      status: 200,
+      data: [
+        {
+          key: "JIRAUSER10000",
+          name: "alice",
+          displayName: "Alice Nguyen",
+          emailAddress: "alice@example.com",
+          active: true,
+        },
+      ],
+    });
+
+    await expect(client.findUsers("alice", 10)).resolves.toEqual([
+      {
+        key: "JIRAUSER10000",
+        name: "alice",
+        displayName: "Alice Nguyen",
+        emailAddress: "alice@example.com",
+        active: true,
+      },
+    ]);
+  });
+
+  it("returns editable metadata for an issue", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.get).mockResolvedValue({
+      status: 200,
+      data: {
+        fields: {
+          summary: {
+            required: true,
+            name: "Summary",
+            schema: { type: "string" },
+          },
+          priority: {
+            required: false,
+            name: "Priority",
+            schema: { type: "priority" },
+            allowedValues: [{ id: "3", name: "Medium" }],
+          },
+        },
+      },
+    });
+
+    const result = await client.getEditMeta("DNIEM-42");
+    expect(result.issueKey).toBe("DNIEM-42");
+    expect(result.fields).toContainEqual({
+      id: "priority",
+      name: "Priority",
+      required: false,
+      schemaType: "priority",
+      allowedValues: [{ id: "3", name: "Medium", value: null }],
+    });
   });
 
   it("posts a transition payload with optional comment and fields", async () => {
@@ -79,6 +143,34 @@ describe("JiraHttpClient write helpers", () => {
       issueKey: "DNIEM-42",
       url: `${BASE_URL}/browse/DNIEM-42`,
     });
+  });
+
+  it("updates a comment and returns its id", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.put).mockResolvedValue({
+      status: 200,
+      data: { id: "10001" },
+    });
+
+    await expect(
+      client.updateComment("DNIEM-42", "10001", { body: buildMinimalAdfDocument("Updated") })
+    ).resolves.toEqual({
+      id: "10001",
+      issueKey: "DNIEM-42",
+      url: `${BASE_URL}/browse/DNIEM-42`,
+    });
+  });
+
+  it("deletes a comment", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.delete).mockResolvedValue({
+      status: 204,
+      data: "",
+    });
+
+    await expect(client.deleteComment("DNIEM-42", "10001")).resolves.toBeUndefined();
   });
 
   it("updates issue fields via PUT /issue/{key}", async () => {
@@ -129,7 +221,7 @@ describe("JiraHttpClient write helpers", () => {
   it("returns my Tempo worklogs", async () => {
     const client = new JiraHttpClient(BASE_URL, cookies);
     const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
-    vi.mocked(mockedInstance.get).mockResolvedValue({
+    vi.mocked(mockedInstance.post).mockResolvedValue({
       status: 200,
       data: [
         {
@@ -146,5 +238,100 @@ describe("JiraHttpClient write helpers", () => {
     await expect(
       client.getMyWorklogs({ workerKey: "alice", dateFrom: "2026-04-01", dateTo: "2026-04-30" })
     ).resolves.toHaveLength(1);
+  });
+
+  it("updates a Tempo worklog", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.put).mockResolvedValue({
+      status: 200,
+      data: {
+        tempoWorklogId: 30001,
+        jiraWorklogId: 40001,
+        workerKey: "alice",
+        timeSpentSeconds: 3600,
+        timeSpent: "1h",
+        startDate: "2026-04-24",
+        originTaskId: 42,
+        comment: "Updated",
+        billableSeconds: null,
+        dateCreated: "2026-04-24",
+        dateUpdated: "2026-04-24",
+        issue: { key: "DNIEM-42", summary: "Task", projectKey: "DNIEM" },
+      },
+    });
+
+    await expect(
+      client.updateWorklog("30001", { timeSpentSeconds: 3600, comment: "Updated" })
+    ).resolves.toMatchObject({ tempoWorklogId: 30001, timeSpent: "1h" });
+  });
+
+  it("deletes a Tempo worklog", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.delete).mockResolvedValue({
+      status: 204,
+      data: "",
+    });
+
+    await expect(client.deleteWorklog("30001")).resolves.toBeUndefined();
+  });
+
+  it("uploads an attachment", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "jira-run-mcp-"));
+    const filePath = join(dir, "report.txt");
+    await writeFile(filePath, "attachment content");
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 200,
+      data: [
+        {
+          id: "50001",
+          filename: "report.txt",
+          size: 18,
+          mimeType: "text/plain",
+          content: `${BASE_URL}/secure/attachment/50001/report.txt`,
+        },
+      ],
+    });
+
+    await expect(client.addAttachment("DNIEM-42", filePath)).resolves.toEqual([
+      {
+        id: "50001",
+        filename: "report.txt",
+        size: 18,
+        mimeType: "text/plain",
+        url: `${BASE_URL}/secure/attachment/50001/report.txt`,
+      },
+    ]);
+  });
+
+  it("returns projects, components, and priorities", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.get)
+      .mockResolvedValueOnce({
+        status: 200,
+        data: [{ id: "10000", key: "DNIEM", name: "DNIEM Project" }],
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: [{ id: "20000", name: "QA", description: "Quality" }],
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: [{ id: "3", name: "Medium", description: "Medium priority", iconUrl: "icon.png" }],
+      });
+
+    await expect(client.getProjects()).resolves.toEqual([
+      { id: "10000", key: "DNIEM", name: "DNIEM Project", url: `${BASE_URL}/projects/DNIEM` },
+    ]);
+    await expect(client.getComponents("DNIEM")).resolves.toEqual([
+      { id: "20000", name: "QA", description: "Quality" },
+    ]);
+    await expect(client.getPriorities()).resolves.toEqual([
+      { id: "3", name: "Medium", description: "Medium priority", iconUrl: "icon.png" },
+    ]);
   });
 });

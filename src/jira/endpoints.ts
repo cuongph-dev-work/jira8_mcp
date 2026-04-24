@@ -19,12 +19,24 @@ export function issueTransitionsUrl(baseUrl: string, issueKey: string): string {
   return `${issueUrl(baseUrl, issueKey)}/transitions`;
 }
 
+export function issueEditMetaUrl(baseUrl: string, issueKey: string): string {
+  return `${issueUrl(baseUrl, issueKey)}/editmeta`;
+}
+
 export function issueCommentUrl(baseUrl: string, issueKey: string): string {
   return `${issueUrl(baseUrl, issueKey)}/comment`;
 }
 
+export function issueCommentByIdUrl(baseUrl: string, issueKey: string, commentId: string): string {
+  return `${issueCommentUrl(baseUrl, issueKey)}/${encodeURIComponent(commentId)}`;
+}
+
 export function issueAssignUrl(baseUrl: string, issueKey: string): string {
   return `${issueUrl(baseUrl, issueKey)}/assignee`;
+}
+
+export function issueAttachmentUrl(baseUrl: string, issueKey: string): string {
+  return `${issueUrl(baseUrl, issueKey)}/attachments`;
 }
 
 /**
@@ -48,6 +60,10 @@ export function myselfUrl(baseUrl: string): string {
   return `${baseUrl}${API_BASE}/myself`;
 }
 
+export function userSearchUrl(baseUrl: string): string {
+  return `${baseUrl}${API_BASE}/user/search`;
+}
+
 /**
  * URL for the Tempo create-worklog endpoint (POST).
  */
@@ -55,12 +71,28 @@ export function tempoCreateWorklogUrl(baseUrl: string): string {
   return `${baseUrl}${TEMPO_API_BASE}/worklogs`;
 }
 
-export function tempoWorklogsUrl(baseUrl: string): string {
-  return `${baseUrl}${TEMPO_API_BASE}/worklogs`;
+export function tempoSearchWorklogsUrl(baseUrl: string): string {
+  return `${baseUrl}${TEMPO_API_BASE}/worklogs/search`;
+}
+
+export function tempoWorklogUrl(baseUrl: string, worklogId: string): string {
+  return `${baseUrl}${TEMPO_API_BASE}/worklogs/${encodeURIComponent(worklogId)}`;
 }
 
 export function issueLinkUrl(baseUrl: string): string {
   return `${baseUrl}${API_BASE}/issueLink`;
+}
+
+export function projectsUrl(baseUrl: string): string {
+  return `${baseUrl}${API_BASE}/project`;
+}
+
+export function projectComponentsUrl(baseUrl: string, projectKey: string): string {
+  return `${baseUrl}${API_BASE}/project/${encodeURIComponent(projectKey)}/components`;
+}
+
+export function prioritiesUrl(baseUrl: string): string {
+  return `${baseUrl}${API_BASE}/priority`;
 }
 
 import { CUSTOM_FIELD } from "./constants.js";

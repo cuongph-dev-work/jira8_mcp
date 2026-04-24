@@ -20,13 +20,19 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 - ⏱️ `jira_add_worklog` — log work on a Jira issue through Tempo Timesheets
 - 📝 `jira_create_issue` — create an issue using issue-type-specific required and optional fields
 - 💬 `jira_add_comment` — add plain-text or ADF comments to an issue
-- 🔄 `jira_transition_issue` — move an issue through workflow transitions
+- ✏️ `jira_update_comment` / `jira_delete_comment` — update or remove issue comments
+- 🔄 `jira_transition_issue` — move an issue through workflow transitions by id or name
 - 🧭 `jira_get_create_meta` — inspect static create metadata from `src/jira/constants.ts`
+- 🧭 `jira_get_edit_meta` — inspect live editable fields for one issue
 - ✏️ `jira_update_issue_fields` — update a curated set of Jira fields safely
 - 🔗 `jira_link_issues` — create links between issues
 - 👤 `jira_assign_issue` — assign issues by name or key
+- 👥 `jira_find_user` — search Jira users for assignment/collaboration flows
 - 📋 `jira_get_transitions` — list currently available transitions for an issue
 - 📅 `jira_get_my_worklogs` — list the authenticated user's Tempo worklogs
+- 📅 `jira_update_worklog` / `jira_delete_worklog` — correct or remove Tempo worklogs
+- 📎 `jira_add_attachment` — upload workspace files as issue attachments
+- 🗂️ `jira_get_projects` / `jira_get_components` / `jira_get_priorities` — discover common Jira metadata
 - 🛡️ Clean `SESSION_EXPIRED` / `AUTH_REQUIRED` errors with reauthentication hints
 - 🖥️ Three CLI utilities for session management
 
@@ -179,9 +185,12 @@ Transition a Jira issue to a target workflow state.
 | Field | Type | Description |
 |---|---|---|
 | `issueKey` | `string` | Jira issue key |
-| `transitionId` | `string` | Jira workflow transition id |
+| `transitionId` | `string` | Optional Jira workflow transition id |
+| `transitionName` | `string` | Optional transition name resolved from current available transitions |
 | `comment` | `string \| object` | Optional plain text or ADF comment |
 | `fields` | `object` | Optional curated field updates sent with the transition |
+
+Provide exactly one of `transitionId` or `transitionName`.
 
 **Output:** Confirmation with issue key, transition id, and browser URL.
 
@@ -197,6 +206,19 @@ Return static create metadata for supported Jira issue types.
 | `issueTypeId` | `string` | Optional issue type id to narrow the result |
 
 **Output:** Required fields, optional fields, and known option sets from `src/jira/constants.ts`.
+
+---
+
+### `jira_get_edit_meta`
+
+Return live editable fields for a specific issue.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+
+**Output:** Field IDs, labels, required flags, schema types, and allowed values returned by Jira.
 
 ---
 
@@ -245,6 +267,20 @@ Assign a Jira issue to a user.
 
 ---
 
+### `jira_find_user`
+
+Search Jira users for assignment and collaboration flows.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `query` | `string` | Username, display name, or search text |
+| `maxResults` | `number` | Max results (1-50, default 10) |
+
+**Output:** Display name, username, user key, active flag, and email if Jira exposes it.
+
+---
+
 ### `jira_get_transitions`
 
 List the currently available workflow transitions for an issue.
@@ -255,6 +291,35 @@ List the currently available workflow transitions for an issue.
 | `issueKey` | `string` | Jira issue key |
 
 **Output:** Transition ids, names, and destination statuses.
+
+---
+
+### `jira_update_comment`
+
+Update an existing issue comment.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+| `commentId` | `string` | Jira comment id |
+| `body` | `string \| object` | Replacement body as plain text or raw ADF |
+
+**Output:** Confirmation with issue key, comment id, and browser URL.
+
+---
+
+### `jira_delete_comment`
+
+Delete an issue comment by id.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+| `commentId` | `string` | Jira comment id |
+
+**Output:** Confirmation with issue key and deleted comment id.
 
 ---
 
@@ -269,6 +334,84 @@ List the authenticated user's Tempo worklogs.
 | `dateTo` | `string` | Optional end date in `yyyy-MM-dd` format |
 
 **Output:** Tempo worklog ids, issue keys, dates, durations, and comments.
+
+---
+
+### `jira_update_worklog`
+
+Update a Tempo worklog by id.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `worklogId` | `string` | Tempo worklog id |
+| `timeSpent` | `string` | Optional duration using `Nd`, `Nh`, `Nm` tokens |
+| `startDate` | `string` | Optional date in `yyyy-MM-dd` format |
+| `comment` | `string` | Optional updated comment |
+| `process` | `string` | Optional Tempo Process attribute |
+| `typeOfWork` | `string` | Optional Tempo Type Of Work attribute |
+
+**Output:** Confirmation with updated Tempo id, issue key, date, and duration.
+
+---
+
+### `jira_delete_worklog`
+
+Delete a Tempo worklog by id.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `worklogId` | `string` | Tempo worklog id |
+
+**Output:** Confirmation with deleted Tempo id.
+
+---
+
+### `jira_add_attachment`
+
+Upload a local file from the current workspace to an issue.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `issueKey` | `string` | Jira issue key |
+| `filePath` | `string` | Path to a file inside the current workspace |
+
+**Output:** Uploaded attachment ids, filenames, sizes, and issue URL.
+
+---
+
+### `jira_get_projects`
+
+List Jira projects visible to the authenticated user.
+
+**Input:** none.
+
+**Output:** Project keys, names, ids, and browser URLs.
+
+---
+
+### `jira_get_components`
+
+List components for a Jira project.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `projectKey` | `string` | Jira project key |
+
+**Output:** Component ids, names, and descriptions.
+
+---
+
+### `jira_get_priorities`
+
+List Jira priorities configured in the instance.
+
+**Input:** none.
+
+**Output:** Priority ids, names, and descriptions.
 
 ## Project Structure
 
@@ -288,20 +431,33 @@ src/
 │   ├── adf.ts             # Shared ADF normalization helpers
 │   ├── create-meta.ts     # Static issue create metadata helpers
 │   ├── create-issue.ts    # Create-issue validation and payload helpers
+│   ├── edit-meta.ts       # Live issue edit metadata normalization
+│   ├── user-search.ts     # User search normalization
+│   ├── transition-resolution.ts # Transition name resolution
 │   ├── update-issue.ts    # Curated field update normalization
 │   └── http-client.ts     # Cookie-authenticated Jira HTTP client
 ├── tools/
+│   ├── add-attachment.ts  # jira_add_attachment handler
 │   ├── add-comment.ts     # jira_add_comment handler
 │   ├── get-issue.ts       # jira_get_issue handler
+│   ├── find-user.ts       # jira_find_user handler
+│   ├── get-components.ts  # jira_get_components handler
 │   ├── get-create-meta.ts # jira_get_create_meta handler
+│   ├── get-edit-meta.ts   # jira_get_edit_meta handler
 │   ├── get-my-worklogs.ts # jira_get_my_worklogs handler
+│   ├── get-priorities.ts  # jira_get_priorities handler
+│   ├── get-projects.ts    # jira_get_projects handler
 │   ├── get-transitions.ts # jira_get_transitions handler
 │   ├── link-issues.ts     # jira_link_issues handler
 │   ├── assign-issue.ts    # jira_assign_issue handler
+│   ├── delete-comment.ts  # jira_delete_comment handler
+│   ├── delete-worklog.ts  # jira_delete_worklog handler
 │   ├── search-issues.ts   # jira_search_issues handler
 │   ├── add-worklog.ts     # jira_add_worklog handler
 │   ├── transition-issue.ts # jira_transition_issue handler
+│   ├── update-comment.ts  # jira_update_comment handler
 │   ├── update-issue-fields.ts # jira_update_issue_fields handler
+│   ├── update-worklog.ts  # jira_update_worklog handler
 │   └── create-issue.ts    # jira_create_issue handler
 ├── cli/
 │   ├── auth-login.ts      # jira-auth-login entry point

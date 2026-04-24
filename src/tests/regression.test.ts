@@ -37,6 +37,8 @@ vi.mock("axios", async () => {
       create: vi.fn(() => ({
         get: vi.fn(),
         post: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(),
       })),
     },
   };
@@ -318,6 +320,110 @@ describe("tool auth failure — isError response", () => {
       { dateFrom: "2026-04-01", dateTo: "2026-04-30" },
       MOCK_CONFIG as never
     );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_find_user returns isError:true when session is missing", async () => {
+    const { handleFindUser } = await import("../tools/find-user.js");
+    const result = await handleFindUser(
+      { query: "alice" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_edit_meta returns isError:true when session is missing", async () => {
+    const { handleGetEditMeta } = await import("../tools/get-edit-meta.js");
+    const result = await handleGetEditMeta(
+      { issueKey: "PROJ-1" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_update_comment returns isError:true when session is missing", async () => {
+    const { handleUpdateComment } = await import("../tools/update-comment.js");
+    const result = await handleUpdateComment(
+      { issueKey: "PROJ-1", commentId: "10001", body: "updated" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_delete_comment returns isError:true when session is missing", async () => {
+    const { handleDeleteComment } = await import("../tools/delete-comment.js");
+    const result = await handleDeleteComment(
+      { issueKey: "PROJ-1", commentId: "10001" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_update_worklog returns isError:true when session is missing", async () => {
+    const { handleUpdateWorklog } = await import("../tools/update-worklog.js");
+    const result = await handleUpdateWorklog(
+      { worklogId: "30001", comment: "updated" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_delete_worklog returns isError:true when session is missing", async () => {
+    const { handleDeleteWorklog } = await import("../tools/delete-worklog.js");
+    const result = await handleDeleteWorklog(
+      { worklogId: "30001" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_add_attachment returns isError:true when session is missing", async () => {
+    const { handleAddAttachment } = await import("../tools/add-attachment.js");
+    const result = await handleAddAttachment(
+      { issueKey: "PROJ-1", filePath: "README.md" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_projects returns isError:true when session is missing", async () => {
+    const { handleGetProjects } = await import("../tools/get-projects.js");
+    const result = await handleGetProjects({}, MOCK_CONFIG as never);
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_components returns isError:true when session is missing", async () => {
+    const { handleGetComponents } = await import("../tools/get-components.js");
+    const result = await handleGetComponents(
+      { projectKey: "PROJ" },
+      MOCK_CONFIG as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("AUTH_REQUIRED");
+  });
+
+  it("jira_get_priorities returns isError:true when session is missing", async () => {
+    const { handleGetPriorities } = await import("../tools/get-priorities.js");
+    const result = await handleGetPriorities({}, MOCK_CONFIG as never);
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("AUTH_REQUIRED");

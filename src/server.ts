@@ -6,16 +6,26 @@ import { z } from "zod";
 import { config } from "./config.js";
 import { ISSUE_TYPE } from "./jira/constants.js";
 import { handleAddComment } from "./tools/add-comment.js";
+import { handleAddAttachment } from "./tools/add-attachment.js";
 import { handleAssignIssue } from "./tools/assign-issue.js";
 import { handleCreateIssue } from "./tools/create-issue.js";
+import { handleDeleteComment } from "./tools/delete-comment.js";
+import { handleDeleteWorklog } from "./tools/delete-worklog.js";
+import { handleFindUser } from "./tools/find-user.js";
+import { handleGetComponents } from "./tools/get-components.js";
 import { handleGetIssue } from "./tools/get-issue.js";
 import { handleGetCreateMeta } from "./tools/get-create-meta.js";
+import { handleGetEditMeta } from "./tools/get-edit-meta.js";
 import { handleGetMyWorklogs } from "./tools/get-my-worklogs.js";
+import { handleGetPriorities } from "./tools/get-priorities.js";
+import { handleGetProjects } from "./tools/get-projects.js";
 import { handleGetTransitions } from "./tools/get-transitions.js";
 import { handleLinkIssues } from "./tools/link-issues.js";
 import { handleSearchIssues } from "./tools/search-issues.js";
 import { handleTransitionIssue } from "./tools/transition-issue.js";
+import { handleUpdateComment } from "./tools/update-comment.js";
 import { handleUpdateIssueFields } from "./tools/update-issue-fields.js";
+import { handleUpdateWorklog } from "./tools/update-worklog.js";
 import { handleAddWorklog } from "./tools/add-worklog.js";
 
 // ---------------------------------------------------------------------------
@@ -246,10 +256,11 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_transition_issue",
-    "Transition a Jira issue to a target workflow state by transition ID, with optional comment and field updates.",
+    "Transition a Jira issue by transitionId or transitionName, with optional comment and field updates.",
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
-      transitionId: z.string().describe("Transition ID from jira_get_transitions or Jira workflow metadata."),
+      transitionId: z.string().optional().describe("Transition ID from jira_get_transitions. Provide exactly one of transitionId or transitionName."),
+      transitionName: z.string().optional().describe("Transition name to resolve from current available transitions. Provide exactly one of transitionId or transitionName."),
       comment: z.union([z.string(), z.record(z.unknown())]).optional().describe("Optional transition comment as plain text or raw ADF."),
       fields: z.record(z.unknown()).optional().describe("Optional field updates to send with the transition."),
     },
@@ -266,6 +277,29 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
     },
     async (input) => {
       return handleGetCreateMeta(input);
+    }
+  );
+
+  server.tool(
+    "jira_find_user",
+    "Search Jira users by username/display name and return normalized identity fields for assignment/collaboration flows.",
+    {
+      query: z.string().describe("Search text, typically username or display name."),
+      maxResults: z.number().int().min(1).max(50).optional().default(10).describe("Maximum users to return (1-50, default 10)."),
+    },
+    async (input) => {
+      return handleFindUser(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_get_edit_meta",
+    "Return live editable fields for a specific issue, including field IDs, required flags, schema type, and allowed values.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+    },
+    async (input) => {
+      return handleGetEditMeta(input, config);
     }
   );
 
@@ -321,13 +355,106 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_get_my_worklogs",
-    "List the authenticated user's Tempo worklogs for an optional date range.",
+    "List the authenticated user's Tempo worklogs for a date range. Both dates default to today if omitted.",
     {
-      dateFrom: z.string().optional().describe("Optional start date in yyyy-MM-dd format"),
-      dateTo: z.string().optional().describe("Optional end date in yyyy-MM-dd format"),
+      dateFrom: z.string().optional().describe("Start date in yyyy-MM-dd format (defaults to today)"),
+      dateTo: z.string().optional().describe("End date in yyyy-MM-dd format (defaults to today)"),
     },
     async (input) => {
       return handleGetMyWorklogs(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_update_comment",
+    "Update an existing Jira issue comment. Body accepts plain text or raw ADF JSON.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      commentId: z.string().describe("Jira comment ID."),
+      body: z.union([z.string(), z.record(z.unknown())]).describe("Replacement comment body as plain text or raw ADF document."),
+    },
+    async (input) => {
+      return handleUpdateComment(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_delete_comment",
+    "Delete an existing Jira issue comment by ID.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      commentId: z.string().describe("Jira comment ID."),
+    },
+    async (input) => {
+      return handleDeleteComment(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_update_worklog",
+    "Update a Tempo worklog by ID. Supports date, duration, comment, and known Tempo attributes.",
+    {
+      worklogId: z.string().describe("Tempo worklog ID."),
+      timeSpent: z.string().optional().describe('Duration string, e.g. "2h", "30m", "1d 4h".'),
+      startDate: z.string().optional().describe("Date of work in yyyy-MM-dd format."),
+      comment: z.string().optional().describe("Updated worklog comment."),
+      process: z.string().optional().describe("Tempo Process attribute."),
+      typeOfWork: z.string().optional().describe("Tempo Type Of Work attribute."),
+    },
+    async (input) => {
+      return handleUpdateWorklog(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_delete_worklog",
+    "Delete a Tempo worklog by ID.",
+    {
+      worklogId: z.string().describe("Tempo worklog ID."),
+    },
+    async (input) => {
+      return handleDeleteWorklog(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_add_attachment",
+    "Upload a local workspace file as a Jira issue attachment.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      filePath: z.string().describe("Path to a local file inside the current workspace."),
+    },
+    async (input) => {
+      return handleAddAttachment(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_get_projects",
+    "List Jira projects visible to the authenticated user.",
+    {},
+    async (input) => {
+      return handleGetProjects(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_get_components",
+    "List components for a Jira project key.",
+    {
+      projectKey: z.string().describe("Jira project key, e.g. PROJ."),
+    },
+    async (input) => {
+      return handleGetComponents(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_get_priorities",
+    "List Jira priorities configured in the Jira instance.",
+    {},
+    async (input) => {
+      return handleGetPriorities(input, config);
     }
   );
 

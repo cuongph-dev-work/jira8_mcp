@@ -1,33 +1,53 @@
+import { readFile } from "node:fs/promises";
+import { basename } from "node:path";
+import { Blob } from "node:buffer";
 import axios, { type AxiosInstance } from "axios";
 import {
   createIssueUrl,
+  issueAttachmentUrl,
   issueCommentUrl,
+  issueCommentByIdUrl,
+  issueEditMetaUrl,
   issueAssignUrl,
   issueLinkUrl,
   issueTransitionsUrl,
   issueUrl,
   myselfUrl,
+  prioritiesUrl,
+  projectComponentsUrl,
+  projectsUrl,
   searchUrl,
   tempoCreateWorklogUrl,
-  tempoWorklogsUrl,
+  tempoWorklogUrl,
+  tempoSearchWorklogsUrl,
+  userSearchUrl,
   ISSUE_FIELDS,
   SEARCH_FIELDS,
 } from "./endpoints.js";
+import { normalizeEditMetaResponse } from "./edit-meta.js";
 import { mapIssue, mapIssueSummary } from "./mappers.js";
+import { normalizeUserSearchResponse } from "./user-search.js";
 import { jiraHttpError, jiraResponseError, sessionExpired } from "../errors.js";
 import type {
+  JiraAttachmentUploadResult,
   JiraCommentResult,
   JiraCreatedIssueTransportResult,
   JiraCurrentUser,
+  JiraComponent,
+  JiraEditMetaResult,
   JiraIssue,
   JiraIssueLinkResult,
   JiraIssueTransition,
+  JiraPriority,
+  JiraProject,
   JiraSearchResult,
+  JiraUserSearchResult,
   SessionCookies,
   TempoWorklogInput,
   TempoWorklogListItem,
   TempoWorklogResult,
 } from "../types.js";
+import type { TempoRawWorklog } from "../types/jira-api.js";
 
 // ---------------------------------------------------------------------------
 // Client
@@ -148,6 +168,31 @@ export class JiraHttpClient {
     }));
   }
 
+  async findUsers(query: string, maxResults: number): Promise<JiraUserSearchResult[]> {
+    const url = userSearchUrl(this.baseUrl);
+    const res = await this.http.get(url, {
+      params: {
+        username: query,
+        maxResults,
+      },
+    });
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizeUserSearchResponse(res.data);
+  }
+
+  async getEditMeta(issueKey: string): Promise<JiraEditMetaResult> {
+    const url = issueEditMetaUrl(this.baseUrl, issueKey);
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizeEditMetaResponse(issueKey, res.data);
+  }
+
   async transitionIssue(
     issueKey: string,
     payload: {
@@ -183,6 +228,33 @@ export class JiraHttpClient {
       issueKey,
       url: `${this.baseUrl}/browse/${issueKey}`,
     };
+  }
+
+  async updateComment(
+    issueKey: string,
+    commentId: string,
+    payload: { body: unknown }
+  ): Promise<JiraCommentResult> {
+    const url = issueCommentByIdUrl(this.baseUrl, issueKey, commentId);
+    const res = await this.http.put(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data as { id?: string };
+    return {
+      id: typeof body?.id === "string" ? body.id : commentId,
+      issueKey,
+      url: `${this.baseUrl}/browse/${issueKey}`,
+    };
+  }
+
+  async deleteComment(issueKey: string, commentId: string): Promise<void> {
+    const url = issueCommentByIdUrl(this.baseUrl, issueKey, commentId);
+    const res = await this.http.delete(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
   }
 
   async updateIssueFields(
@@ -229,16 +301,14 @@ export class JiraHttpClient {
 
   async getMyWorklogs(input: {
     workerKey: string;
-    dateFrom?: string;
-    dateTo?: string;
+    dateFrom: string;
+    dateTo: string;
   }): Promise<TempoWorklogListItem[]> {
-    const url = tempoWorklogsUrl(this.baseUrl);
-    const res = await this.http.get(url, {
-      params: {
-        worker: input.workerKey,
-        from: input.dateFrom,
-        to: input.dateTo,
-      },
+    const url = tempoSearchWorklogsUrl(this.baseUrl);
+    const res = await this.http.post(url, {
+      from: input.dateFrom,
+      to: input.dateTo,
+      worker: [input.workerKey],
     });
 
     this.checkForAuthFailure(res.status, url, res.data);
@@ -246,10 +316,47 @@ export class JiraHttpClient {
 
     const body = res.data;
     if (!Array.isArray(body)) {
-      throw jiraResponseError("Expected array response from Tempo GET /worklogs", body);
+      throw jiraResponseError("Expected array response from Tempo POST /worklogs/search", body);
     }
 
-    return body as TempoWorklogListItem[];
+    return (body as TempoRawWorklog[]).map((raw) => ({
+      tempoWorklogId: raw.tempoWorklogId,
+      issueKey: raw.issue?.key ?? String(raw.originTaskId ?? ""),
+      issueSummary: raw.issue?.summary ?? null,
+      timeSpent: raw.timeSpent ?? "",
+      timeSpentSeconds: raw.timeSpentSeconds ?? 0,
+      startDate: raw.started ? raw.started.slice(0, 10) : "",
+      comment: raw.comment ?? null,
+      process: raw.attributes?._Process_?.value ?? null,
+      typeOfWork: raw.attributes?._TypeOfWork_?.value ?? null,
+    }));
+  }
+
+  async updateWorklog(
+    worklogId: string,
+    payload: Partial<TempoWorklogInput>
+  ): Promise<TempoWorklogResult> {
+    const url = tempoWorklogUrl(this.baseUrl, worklogId);
+    const res = await this.http.put(url, payload);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    const body = res.data;
+    const worklog = Array.isArray(body) ? body[0] : body;
+    if (!worklog || typeof worklog !== "object") {
+      throw jiraResponseError("Unexpected Tempo update worklog response shape", body);
+    }
+
+    return worklog as TempoWorklogResult;
+  }
+
+  async deleteWorklog(worklogId: string): Promise<void> {
+    const url = tempoWorklogUrl(this.baseUrl, worklogId);
+    const res = await this.http.delete(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
   }
 
   // ---------------------------------------------------------------------------
@@ -269,6 +376,55 @@ export class JiraHttpClient {
     this.assertOk(res.status, downloadUrl, "");
 
     return Buffer.from(res.data as ArrayBuffer);
+  }
+
+  async addAttachment(issueKey: string, filePath: string): Promise<JiraAttachmentUploadResult[]> {
+    const url = issueAttachmentUrl(this.baseUrl, issueKey);
+    const bytes = await readFile(filePath);
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(bytes)]), basename(filePath));
+
+    const res = await this.http.post(url, form, {
+      headers: {
+        "X-Atlassian-Token": "no-check",
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizeAttachmentUploadResponse(res.data);
+  }
+
+  async getProjects(): Promise<JiraProject[]> {
+    const url = projectsUrl(this.baseUrl);
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizeProjects(res.data, this.baseUrl);
+  }
+
+  async getComponents(projectKey: string): Promise<JiraComponent[]> {
+    const url = projectComponentsUrl(this.baseUrl, projectKey);
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizeComponents(res.data);
+  }
+
+  async getPriorities(): Promise<JiraPriority[]> {
+    const url = prioritiesUrl(this.baseUrl);
+    const res = await this.http.get(url);
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+
+    return normalizePriorities(res.data);
   }
   // ---------------------------------------------------------------------------
   // Time tracking (lightweight — for worklog remaining estimate)
@@ -391,4 +547,95 @@ function isLoginPage(body: string): boolean {
     lower.startsWith("<!") &&
     (lower.includes("log in") || lower.includes("login") || lower.includes("sso"))
   );
+}
+
+function normalizeAttachmentUploadResponse(raw: unknown): JiraAttachmentUploadResult[] {
+  if (!Array.isArray(raw)) {
+    throw jiraResponseError("Unexpected attachment upload response shape", raw);
+  }
+
+  return raw.map((item) => {
+    const record = item as {
+      id?: unknown;
+      filename?: unknown;
+      size?: unknown;
+      mimeType?: unknown;
+      content?: unknown;
+    };
+    if (typeof record.id !== "string" || typeof record.filename !== "string") {
+      throw jiraResponseError("Unexpected attachment item response shape", item);
+    }
+
+    return {
+      id: record.id,
+      filename: record.filename,
+      size: typeof record.size === "number" ? record.size : 0,
+      mimeType: typeof record.mimeType === "string" ? record.mimeType : null,
+      url: typeof record.content === "string" ? record.content : null,
+    };
+  });
+}
+
+function normalizeProjects(raw: unknown, baseUrl: string): JiraProject[] {
+  if (!Array.isArray(raw)) {
+    throw jiraResponseError("Unexpected projects response shape", raw);
+  }
+
+  return raw.map((item) => {
+    const record = item as { id?: unknown; key?: unknown; name?: unknown; self?: unknown };
+    if (typeof record.key !== "string" || typeof record.name !== "string") {
+      throw jiraResponseError("Unexpected project response item shape", item);
+    }
+
+    return {
+      id: typeof record.id === "string" ? record.id : null,
+      key: record.key,
+      name: record.name,
+      url: `${baseUrl}/projects/${record.key}`,
+    };
+  });
+}
+
+function normalizeComponents(raw: unknown): JiraComponent[] {
+  if (!Array.isArray(raw)) {
+    throw jiraResponseError("Unexpected components response shape", raw);
+  }
+
+  return raw.map((item) => {
+    const record = item as { id?: unknown; name?: unknown; description?: unknown };
+    if (typeof record.id !== "string" || typeof record.name !== "string") {
+      throw jiraResponseError("Unexpected component response item shape", item);
+    }
+
+    return {
+      id: record.id,
+      name: record.name,
+      description: typeof record.description === "string" ? record.description : null,
+    };
+  });
+}
+
+function normalizePriorities(raw: unknown): JiraPriority[] {
+  if (!Array.isArray(raw)) {
+    throw jiraResponseError("Unexpected priorities response shape", raw);
+  }
+
+  return raw.map((item) => {
+    const record = item as {
+      id?: unknown;
+      name?: unknown;
+      description?: unknown;
+      iconUrl?: unknown;
+    };
+    if (typeof record.id !== "string" || typeof record.name !== "string") {
+      throw jiraResponseError("Unexpected priority response item shape", item);
+    }
+
+    return {
+      id: record.id,
+      name: record.name,
+      description: typeof record.description === "string" ? record.description : null,
+      iconUrl: typeof record.iconUrl === "string" ? record.iconUrl : null,
+    };
+  });
 }

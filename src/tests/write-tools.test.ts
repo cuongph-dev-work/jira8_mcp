@@ -10,13 +10,23 @@ import {
   getKnownFieldOptions,
 } from "../jira/create-meta.js";
 import { handleAddComment } from "../tools/add-comment.js";
+import { handleAddAttachment } from "../tools/add-attachment.js";
 import { handleAssignIssue } from "../tools/assign-issue.js";
+import { handleDeleteComment } from "../tools/delete-comment.js";
+import { handleDeleteWorklog } from "../tools/delete-worklog.js";
+import { handleFindUser } from "../tools/find-user.js";
+import { handleGetComponents } from "../tools/get-components.js";
 import { handleGetCreateMeta } from "../tools/get-create-meta.js";
+import { handleGetEditMeta } from "../tools/get-edit-meta.js";
 import { handleGetMyWorklogs } from "../tools/get-my-worklogs.js";
+import { handleGetPriorities } from "../tools/get-priorities.js";
+import { handleGetProjects } from "../tools/get-projects.js";
 import { handleGetTransitions } from "../tools/get-transitions.js";
 import { handleLinkIssues } from "../tools/link-issues.js";
 import { handleTransitionIssue } from "../tools/transition-issue.js";
+import { handleUpdateComment } from "../tools/update-comment.js";
 import { handleUpdateIssueFields } from "../tools/update-issue-fields.js";
+import { handleUpdateWorklog } from "../tools/update-worklog.js";
 import {
   buildUpdateIssuePayload,
   UPDATEABLE_FIELDS,
@@ -151,6 +161,35 @@ describe("transition/comment tool handlers", () => {
     expect(result.content[0].text).toContain("31");
   });
 
+  it("resolves transition by name before applying it", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getTransitions").mockResolvedValue([
+      { id: "31", name: "Done", toStatus: "Done" },
+    ]);
+    vi.spyOn(JiraHttpClient.prototype, "transitionIssue").mockResolvedValue(undefined);
+
+    const result = await handleTransitionIssue(
+      { issueKey: "DNIEM-42", transitionName: "done" },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("31");
+    expect(result.content[0].text).toContain("Done");
+  });
+
+  it("rejects transition input with both id and name", async () => {
+    const result = await handleTransitionIssue(
+      { issueKey: "DNIEM-42", transitionId: "31", transitionName: "Done" },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("exactly one");
+  });
+
   it("formats create meta results", async () => {
     const result = await handleGetCreateMeta({ issueTypeId: ISSUE_TYPE.TASK });
 
@@ -198,6 +237,56 @@ describe("transition/comment tool handlers", () => {
     expect(result.content[0].text).toContain("Start Progress");
   });
 
+  it("formats find user results", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "findUsers").mockResolvedValue([
+      {
+        key: "JIRAUSER10000",
+        name: "alice",
+        displayName: "Alice Nguyen",
+        emailAddress: "alice@example.com",
+        active: true,
+      },
+    ]);
+
+    const result = await handleFindUser(
+      { query: "alice", maxResults: 10 },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Alice Nguyen");
+  });
+
+  it("formats edit meta results", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "getEditMeta").mockResolvedValue({
+      issueKey: "DNIEM-42",
+      fields: [
+        {
+          id: "priority",
+          name: "Priority",
+          required: false,
+          schemaType: "priority",
+          allowedValues: [{ id: "3", name: "Medium", value: null }],
+        },
+      ],
+    });
+
+    const result = await handleGetEditMeta(
+      { issueKey: "DNIEM-42" },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("priority");
+    expect(result.content[0].text).toContain("Medium");
+  });
+
   it("formats link issue results", async () => {
     vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
       cookieHeader: "JSESSIONID=abc",
@@ -234,6 +323,32 @@ describe("transition/comment tool handlers", () => {
     expect(result.content[0].text).toContain("Issue assigned");
   });
 
+  it("formats update and delete comment results", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "updateComment").mockResolvedValue({
+      id: "10001",
+      issueKey: "DNIEM-42",
+      url: "https://jira.example.com/browse/DNIEM-42",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "deleteComment").mockResolvedValue(undefined);
+
+    const updateResult = await handleUpdateComment(
+      { issueKey: "DNIEM-42", commentId: "10001", body: "Updated" },
+      mockConfig as never
+    );
+    const deleteResult = await handleDeleteComment(
+      { issueKey: "DNIEM-42", commentId: "10001" },
+      mockConfig as never
+    );
+
+    expect(updateResult.isError).toBeUndefined();
+    expect(updateResult.content[0].text).toContain("Comment updated");
+    expect(deleteResult.isError).toBeUndefined();
+    expect(deleteResult.content[0].text).toContain("Comment deleted");
+  });
+
   it("formats my worklogs results", async () => {
     vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
       cookieHeader: "JSESSIONID=abc",
@@ -247,10 +362,13 @@ describe("transition/comment tool handlers", () => {
       {
         tempoWorklogId: 30001,
         issueKey: "DNIEM-42",
+        issueSummary: "Fix login page",
         timeSpent: "2h",
         timeSpentSeconds: 7200,
         startDate: "2026-04-24",
         comment: "Implementation",
+        process: "Coding",
+        typeOfWork: "Create",
       },
     ]);
 
@@ -262,5 +380,81 @@ describe("transition/comment tool handlers", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("Alice");
     expect(result.content[0].text).toContain("DNIEM-42");
+  });
+
+  it("formats update and delete worklog results", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "updateWorklog").mockResolvedValue({
+      tempoWorklogId: 30001,
+      jiraWorklogId: 40001,
+      workerKey: "alice",
+      timeSpentSeconds: 3600,
+      timeSpent: "1h",
+      startDate: "2026-04-24",
+      originTaskId: 42,
+      comment: "Updated",
+      billableSeconds: null,
+      dateCreated: "2026-04-24",
+      dateUpdated: "2026-04-24",
+      issue: { key: "DNIEM-42", summary: "Task", projectKey: "DNIEM" },
+    });
+    vi.spyOn(JiraHttpClient.prototype, "deleteWorklog").mockResolvedValue(undefined);
+
+    const updateResult = await handleUpdateWorklog(
+      { worklogId: "30001", timeSpent: "1h", comment: "Updated" },
+      mockConfig as never
+    );
+    const deleteResult = await handleDeleteWorklog(
+      { worklogId: "30001" },
+      mockConfig as never
+    );
+
+    expect(updateResult.isError).toBeUndefined();
+    expect(updateResult.content[0].text).toContain("Worklog updated");
+    expect(deleteResult.isError).toBeUndefined();
+    expect(deleteResult.content[0].text).toContain("Worklog deleted");
+  });
+
+  it("formats attachment and metadata discovery results", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "addAttachment").mockResolvedValue([
+      {
+        id: "50001",
+        filename: "README.md",
+        size: 100,
+        mimeType: "text/markdown",
+        url: "https://jira.example.com/secure/attachment/50001/README.md",
+      },
+    ]);
+    vi.spyOn(JiraHttpClient.prototype, "getProjects").mockResolvedValue([
+      { id: "10000", key: "DNIEM", name: "DNIEM Project", url: "https://jira.example.com/projects/DNIEM" },
+    ]);
+    vi.spyOn(JiraHttpClient.prototype, "getComponents").mockResolvedValue([
+      { id: "20000", name: "QA", description: "Quality" },
+    ]);
+    vi.spyOn(JiraHttpClient.prototype, "getPriorities").mockResolvedValue([
+      { id: "3", name: "Medium", description: "Medium priority", iconUrl: "icon.png" },
+    ]);
+
+    const attachmentResult = await handleAddAttachment(
+      { issueKey: "DNIEM-42", filePath: "README.md" },
+      mockConfig as never
+    );
+    const projectsResult = await handleGetProjects({}, mockConfig as never);
+    const componentsResult = await handleGetComponents(
+      { projectKey: "DNIEM" },
+      mockConfig as never
+    );
+    const prioritiesResult = await handleGetPriorities({}, mockConfig as never);
+
+    expect(attachmentResult.isError).toBeUndefined();
+    expect(attachmentResult.content[0].text).toContain("README.md");
+    expect(projectsResult.content[0].text).toContain("DNIEM Project");
+    expect(componentsResult.content[0].text).toContain("QA");
+    expect(prioritiesResult.content[0].text).toContain("Medium");
   });
 });

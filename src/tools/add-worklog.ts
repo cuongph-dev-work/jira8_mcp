@@ -7,6 +7,7 @@ import {
   TEMPO_TYPE_OF_WORK,
 } from "../jira/constants.js";
 import { isMcpError, McpError } from "../errors.js";
+import { todayLocalDate } from "../utils.js";
 import type { Config } from "../config.js";
 import type { TempoWorkAttributeValue } from "../types.js";
 
@@ -163,8 +164,8 @@ export async function handleAddWorklog(
     includeNonWorkingDays,
   } = parsed.data;
 
-  // Default startDate to today (yyyy-MM-dd)
-  const startDate = parsed.data.startDate ?? new Date().toISOString().slice(0, 10);
+  // Default startDate to today (local timezone)
+  const startDate = parsed.data.startDate ?? todayLocalDate();
 
   // --- Parse duration ---
   let timeSpentSeconds: number;

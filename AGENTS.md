@@ -27,6 +27,9 @@
 - **Tool errors set `isError: true`.** MCP clients rely on this flag. Never return an error as normal content.
 - **3xx from Jira = session expired.** Always treat redirects as auth failure. `validateStatus` accepts only 2xx.
 - **Validate before saving sessions.** The `playwright-auth.ts` module validates a candidate session against Jira before writing it to disk.
+- **Utility functions in `src/utils.ts`.** Shared helpers (e.g. date formatting, string manipulation) must live in `src/utils.ts`, not inline in tool or handler files.
+- **Prefer libraries over hand-rolled code.** For common tasks (date formatting, duration parsing, HTTP retry, etc.), use well-known npm packages instead of writing custom implementations. Only write a manual helper if the logic is trivially small (< 5 lines) and adding a dependency would be disproportionate.
+- **Raw API response types in `src/types/jira-api.ts`.** Types that mirror the exact shape of Jira/Tempo REST API responses must live in `src/types/jira-api.ts`, separate from the normalized application interfaces in `src/types.ts`. This keeps API contracts independently trackable and supports future API documentation generation.
 
 ## File Conventions
 
@@ -40,8 +43,10 @@
 | CLI commands | `src/cli/` | auth-login, auth-check, auth-clear |
 | Tests | `src/tests/` | Vitest, `vi.mock()` hoisted |
 | Config | `src/config.ts` | Zod schema, env vars |
-| Types | `src/types.ts` | Shared interfaces |
+| Types | `src/types.ts` | Shared normalized interfaces |
+| Raw API types | `src/types/jira-api.ts` | Raw Jira/Tempo API response shapes (mirrors exact API payloads) |
 | Errors | `src/errors.ts` | McpError class, factory helpers |
+| Utilities | `src/utils.ts` | Shared helpers (dates, strings, etc.) |
 
 ## Testing Requirements
 
