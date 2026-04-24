@@ -286,6 +286,16 @@ export class JiraHttpClient {
     this.assertOk(res.status, url, res.data);
   }
 
+  async deleteIssue(issueKey: string, deleteSubtasks: boolean): Promise<void> {
+    const url = issueUrl(this.baseUrl, issueKey);
+    const res = await this.http.delete(url, {
+      params: { deleteSubtasks: deleteSubtasks ? "true" : "false" },
+    });
+
+    this.checkForAuthFailure(res.status, url, res.data);
+    this.assertOk(res.status, url, res.data);
+  }
+
   async updateIssueFields(
     issueKey: string,
     payload: { fields: Record<string, unknown> }

@@ -15,6 +15,7 @@ import { handleCloneIssue } from "./tools/clone-issue.js";
 import { handleCreateIssue } from "./tools/create-issue.js";
 import { handleCreateSubtask } from "./tools/create-subtask.js";
 import { handleDeleteComment } from "./tools/delete-comment.js";
+import { handleDeleteIssue } from "./tools/delete-issue.js";
 import { handleDeleteWorklog } from "./tools/delete-worklog.js";
 import { handleFindUser } from "./tools/find-user.js";
 import { handleGetComments } from "./tools/get-comments.js";
@@ -535,6 +536,27 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
     },
     async (input) => {
       return handleDeleteComment(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_delete_issue",
+    `Permanently delete a Jira issue. This action is IRREVERSIBLE.
+
+When to use: only when the user explicitly asks to delete an issue.
+Do NOT use for: closing, resolving, or archiving issues — use jira_transition_issue instead.
+
+If the issue has subtasks, set deleteSubtasks=true or Jira will reject the request.`,
+    {
+      issueKey: z.string().describe("Jira issue key to delete, e.g. PROJ-123"),
+      deleteSubtasks: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Also delete all subtasks. Default false — Jira rejects if issue has subtasks and this is false."),
+    },
+    async (input) => {
+      return handleDeleteIssue(input, config);
     }
   );
 

@@ -36,4 +36,5 @@ Last updated: 2026-04-24
 | [ ] | `jira_transition_issue` | Transition an issue to a new status |
 | [ ] | `jira_assign_issue` | Assign an issue to a user |
 | [ ] | `jira_link_issues` | Create a link between two issues |
+| [ ] | `jira_delete_issue` | Permanently delete an issue |
 | [ ] | `jira_add_attachment` | Upload a file as an issue attachment |
