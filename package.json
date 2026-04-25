@@ -1,5 +1,5 @@
 {
-  "name": "jira-run-mcp",
+  "name": "@cuongph.dev.work/jira-mcp",
   "version": "0.1.0",
   "description": "MCP server for internal Jira 8 via SSO session bootstrap with Playwright",
   "type": "module",
@@ -13,7 +13,21 @@
     "jira-auth-clear": "dist/cli/auth-clear.js"
   },
   "files": [
-    "dist",
+    "dist/auth",
+    "dist/cli",
+    "dist/jira",
+    "dist/tools",
+    "dist/types",
+    "dist/config.js",
+    "dist/config.d.ts",
+    "dist/errors.js",
+    "dist/errors.d.ts",
+    "dist/server.js",
+    "dist/server.d.ts",
+    "dist/types.js",
+    "dist/types.d.ts",
+    "dist/utils.js",
+    "dist/utils.d.ts",
     "README.md",
     "LICENSE"
   ],
@@ -27,7 +41,9 @@
     "jira-auth-clear": "tsx src/cli/auth-clear.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "snyk:test": "snyk test",
+    "snyk:monitor": "snyk monitor"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
