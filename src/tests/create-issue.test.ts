@@ -105,22 +105,21 @@ describe("buildCreateIssuePayload", () => {
     ).toThrow(/description must be a plain text string/i);
   });
 
-  it("rejects an ADF object as description (Jira 8 Server does not support ADF)", () => {
+  it("accepts an ADF object as description (tool layer normalizes before calling this)", () => {
     const adfDescription = {
       type: "doc",
       version: 1,
       content: [{ type: "paragraph", content: [{ type: "text", text: "Already structured" }] }],
     };
-    expect(() =>
-      buildCreateIssuePayload(ISSUE_TYPE.TASK, {
-        [FIELD.PROJECT]: { key: "DNIEM" },
-        [FIELD.SUMMARY]: "Task with ADF description",
-        [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
-        [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
-        [FIELD.DUE_DATE]: "2026-04-30",
-        [FIELD.DESCRIPTION]: adfDescription,
-      })
-    ).toThrow(/description must be a plain text string/i);
+    const payload = buildCreateIssuePayload(ISSUE_TYPE.TASK, {
+      [FIELD.PROJECT]: { key: "DNIEM" },
+      [FIELD.SUMMARY]: "Task with ADF description",
+      [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
+      [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
+      [FIELD.DUE_DATE]: "2026-04-30",
+      [FIELD.DESCRIPTION]: adfDescription,
+    });
+    expect(payload.fields[FIELD.DESCRIPTION]).toEqual(adfDescription);
   });
 });
 

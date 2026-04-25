@@ -71,8 +71,9 @@ function normalizeCreateIssueFields(fields: Record<string, unknown>): Record<str
   if (description == null) {
     return fields;
   }
-  if (typeof description !== "string") {
-    throw invalidInput("description must be a plain text string.");
+  // Accept both plain string (legacy) and pre-normalized ADF object (set by tool layer)
+  if (typeof description !== "string" && (typeof description !== "object" || description === null)) {
+    throw invalidInput("description must be a plain text string or an ADF document object.");
   }
   return fields;
 }

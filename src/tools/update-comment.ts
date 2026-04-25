@@ -2,12 +2,14 @@ import { z } from "zod";
 import { loadAndValidateSession } from "../auth/session-manager.js";
 import { isMcpError } from "../errors.js";
 import { JiraHttpClient } from "../jira/http-client.js";
+import { normalizeJiraBody } from "../jira/adf.js";
 import type { Config } from "../config.js";
 
 export const updateCommentSchema = z.object({
   issueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key"),
   commentId: z.string().min(1, "commentId is required"),
-  body: z.string(),
+  body: z.union([z.string(), z.record(z.unknown())]),
+  bodyFormat: z.enum(["plain", "markdown", "adf"]).default("markdown"),
 });
 
 export async function handleUpdateComment(
@@ -33,9 +35,10 @@ export async function handleUpdateComment(
   }
 
   try {
+    const adfBody = normalizeJiraBody(parsed.data.body, parsed.data.bodyFormat);
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
     const comment = await client.updateComment(parsed.data.issueKey, parsed.data.commentId, {
-      body: parsed.data.body,
+      body: adfBody,
     });
 
     return {

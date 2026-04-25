@@ -38,6 +38,7 @@ import { handleUpdateIssueFields } from "../tools/update-issue-fields.js";
 import { handleUpdateWorklog } from "../tools/update-worklog.js";
 import { handleValidateIssueUpdate } from "../tools/validate-issue-update.js";
 import { handleUploadAttachmentContent } from "../tools/upload-attachment-content.js";
+import { handleAddComments } from "../tools/add-comments.js";
 import {
   buildUpdateIssuePayload,
   UPDATEABLE_FIELDS,
@@ -45,7 +46,9 @@ import {
 import {
   buildMinimalAdfDocument,
   normalizeAdfValue,
+  normalizeJiraBody,
 } from "../jira/adf.js";
+import { markdownToAdf } from "../jira/markdown-to-adf.js";
 import * as sessionManager from "../auth/session-manager.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 
@@ -65,6 +68,296 @@ describe("ADF helpers", () => {
 
   it("rejects invalid ADF input", () => {
     expect(() => normalizeAdfValue(123)).toThrow(/must be a string or a valid ADF document/i);
+  });
+});
+
+describe("markdownToAdf converter", () => {
+  it("converts heading level 1", () => {
+    const doc = markdownToAdf("# Hello");
+    expect(doc.type).toBe("doc");
+    expect(doc.version).toBe(1);
+    const heading = doc.content[0];
+    expect(heading?.type).toBe("heading");
+    if (heading?.type === "heading") {
+      expect(heading.attrs.level).toBe(1);
+      expect(heading.content[0]?.text).toBe("Hello");
+    }
+  });
+
+  it("converts heading level 2 and 3", () => {
+    const doc = markdownToAdf("## Section\n\n### Sub");
+    const [h2, h3] = doc.content;
+    expect(h2?.type).toBe("heading");
+    expect(h3?.type).toBe("heading");
+    if (h2?.type === "heading") expect(h2.attrs.level).toBe(2);
+    if (h3?.type === "heading") expect(h3.attrs.level).toBe(3);
+  });
+
+  it("converts plain paragraph", () => {
+    const doc = markdownToAdf("Hello world");
+    const para = doc.content[0];
+    expect(para?.type).toBe("paragraph");
+    if (para?.type === "paragraph") {
+      expect(para.content[0]?.text).toBe("Hello world");
+    }
+  });
+
+  it("converts bullet list", () => {
+    const doc = markdownToAdf("- Alpha\n- Beta");
+    const list = doc.content[0];
+    expect(list?.type).toBe("bulletList");
+    if (list?.type === "bulletList") {
+      expect(list.content).toHaveLength(2);
+      const item0 = list.content[0];
+      if (item0?.type === "listItem") {
+        const para = item0.content[0];
+        expect(para?.type).toBe("paragraph");
+        if (para?.type === "paragraph") expect(para.content[0]?.text).toBe("Alpha");
+      }
+    }
+  });
+
+  it("converts ordered list", () => {
+    const doc = markdownToAdf("1. First\n2. Second");
+    const list = doc.content[0];
+    expect(list?.type).toBe("orderedList");
+    if (list?.type === "orderedList") {
+      expect(list.content).toHaveLength(2);
+    }
+  });
+
+  it("converts fenced code block", () => {
+    const doc = markdownToAdf("```ts\nconst x = 1;\n```");
+    const block = doc.content[0];
+    expect(block?.type).toBe("codeBlock");
+    if (block?.type === "codeBlock") {
+      expect(block.attrs?.language).toBe("ts");
+      expect(block.content[0]?.text).toBe("const x = 1;");
+    }
+  });
+
+  it("converts inline code mark", () => {
+    const doc = markdownToAdf("Use `npm install` to install.");
+    const para = doc.content[0];
+    expect(para?.type).toBe("paragraph");
+    if (para?.type === "paragraph") {
+      const codeNode = para.content.find((n) => n.marks?.some((m) => m.type === "code"));
+      expect(codeNode?.text).toBe("npm install");
+    }
+  });
+
+  it("converts blockquote", () => {
+    const doc = markdownToAdf("> Important note");
+    const bq = doc.content[0];
+    expect(bq?.type).toBe("blockquote");
+    if (bq?.type === "blockquote") {
+      const para = bq.content[0];
+      expect(para.content[0]?.text).toBe("Important note");
+    }
+  });
+
+  it("converts link with text", () => {
+    const doc = markdownToAdf("See [Jira](https://jira.example.com)");
+    const para = doc.content[0];
+    expect(para?.type).toBe("paragraph");
+    if (para?.type === "paragraph") {
+      const linkNode = para.content.find((n) =>
+        n.marks?.some((m) => m.type === "link")
+      );
+      expect(linkNode?.text).toBe("Jira");
+      const linkMark = linkNode?.marks?.find((m) => m.type === "link");
+      expect(linkMark?.attrs?.href).toBe("https://jira.example.com");
+    }
+  });
+
+  it("converts bold text", () => {
+    const doc = markdownToAdf("**critical**");
+    const para = doc.content[0];
+    expect(para?.type).toBe("paragraph");
+    if (para?.type === "paragraph") {
+      expect(para.content[0]?.marks?.some((m) => m.type === "strong")).toBe(true);
+    }
+  });
+
+  it("converts italic text", () => {
+    const doc = markdownToAdf("_note_");
+    const para = doc.content[0];
+    expect(para?.type).toBe("paragraph");
+    if (para?.type === "paragraph") {
+      expect(para.content[0]?.marks?.some((m) => m.type === "em")).toBe(true);
+    }
+  });
+
+  it("converts table to ADF table nodes (phase 2)", () => {
+    const table = "| A | B |\n|---|---|\n| 1 | 2 |"
+    const doc = markdownToAdf(table);
+    const block = doc.content[0];
+    expect(block?.type).toBe("table");
+    if (block?.type === "table") {
+      expect(block.content).toHaveLength(2); // header row + 1 data row
+      expect(block.content[0]?.type).toBe("tableRow");
+      expect(block.content[0]?.content[0]?.type).toBe("tableHeader");
+      expect(block.content[1]?.content[0]?.type).toBe("tableCell");
+    }
+  });
+
+  it("handles plain text without markdown syntax (regression)", () => {
+    const doc = markdownToAdf("Just plain text with no special chars.");
+    expect(doc.content[0]?.type).toBe("paragraph");
+    if (doc.content[0]?.type === "paragraph") {
+      expect(doc.content[0].content[0]?.text).toBe("Just plain text with no special chars.");
+    }
+  });
+});
+
+describe("normalizeJiraBody", () => {
+  it('wraps string in single paragraph when format is "plain"', () => {
+    const doc = normalizeJiraBody("hello", "plain");
+    expect(doc).toEqual(buildMinimalAdfDocument("hello"));
+  });
+
+  it('parses markdown when format is "markdown" (default)', () => {
+    const doc = normalizeJiraBody("# Title", "markdown");
+    expect(doc.content[0]?.type).toBe("heading");
+  });
+
+  it('passes through valid ADF when format is "adf"', () => {
+    const adf = buildMinimalAdfDocument("Already ADF");
+    expect(normalizeJiraBody(adf, "adf")).toEqual(adf);
+  });
+
+  it('rejects invalid ADF object when format is "adf"', () => {
+    expect(() => normalizeJiraBody({ type: "wrong" }, "adf")).toThrow(/not a valid ADF/i);
+  });
+
+  it('rejects non-string body with "plain" format', () => {
+    expect(() => normalizeJiraBody({ type: "wrong" }, "plain")).toThrow(/must be a string/i);
+  });
+
+  it('defaults to "markdown" format', () => {
+    const doc = normalizeJiraBody("# Heading");
+    expect(doc.content[0]?.type).toBe("heading");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 2 tests
+// ---------------------------------------------------------------------------
+
+describe("jira_preview_adf handler", () => {
+  it("returns ADF JSON for markdown input", async () => {
+    const { handlePreviewAdf } = await import("../tools/preview-adf.js");
+    const result = await handlePreviewAdf({ body: "# Title\n\n- item", bodyFormat: "markdown" });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]?.text).toContain("ADF Preview");
+    expect(result.content[0]?.text).toContain('"type": "doc"');
+  });
+
+  it("returns stats including node types", async () => {
+    const { handlePreviewAdf } = await import("../tools/preview-adf.js");
+    const result = await handlePreviewAdf({ body: "# H1\n\nParagraph", bodyFormat: "markdown" });
+    expect(result.content[0]?.text).toContain("heading");
+    expect(result.content[0]?.text).toContain("paragraph");
+  });
+
+  it("returns error for invalid input", async () => {
+    const { handlePreviewAdf } = await import("../tools/preview-adf.js");
+    const result = await handlePreviewAdf({ body: 123 });
+    expect(result.isError).toBe(true);
+  });
+
+  it("includes table ADF node in output for GFM table", async () => {
+    const { handlePreviewAdf } = await import("../tools/preview-adf.js");
+    const result = await handlePreviewAdf({ body: "| A | B |\n|---|---|\n| 1 | 2 |", bodyFormat: "markdown" });
+    expect(result.content[0]?.text).toContain('"type": "table"');
+    expect(result.content[0]?.text).toContain('"type": "tableRow"');
+  });
+});
+
+describe("markdownToAdf — table nodes (phase 2)", () => {
+  it("table with multiple rows produces correct ADF structure", () => {
+    const md = "| Col1 | Col2 |\n|---|---|\n| A | B |\n| C | D |";
+    const doc = markdownToAdf(md);
+    expect(doc.content[0]?.type).toBe("table");
+    const table = doc.content[0];
+    if (table?.type === "table") {
+      expect(table.content).toHaveLength(3); // 1 header + 2 data rows
+      expect(table.content[0]?.content[0]?.type).toBe("tableHeader");
+      expect(table.content[1]?.content[0]?.type).toBe("tableCell");
+    }
+  });
+});
+
+describe("jira_add_comments bulk handler", () => {
+  const mockConfig = {
+    JIRA_BASE_URL: "https://jira.example.com",
+    JIRA_SESSION_FILE: ".jira/session.json",
+    JIRA_VALIDATE_PATH: "/rest/api/2/myself",
+    MCP_PORT: 3000,
+    LOG_LEVEL: "info",
+    PLAYWRIGHT_HEADLESS: false,
+    PLAYWRIGHT_BROWSER: "chromium" as const,
+    ATTACHMENT_WORKSPACE: process.cwd(),
+  };
+
+  it("adds all comments and returns success table", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "addComment")
+      .mockResolvedValueOnce({ id: "1", issueKey: "DNIEM-42", url: "https://jira.example.com/browse/DNIEM-42?focusedCommentId=1" })
+      .mockResolvedValueOnce({ id: "2", issueKey: "DNIEM-42", url: "https://jira.example.com/browse/DNIEM-42?focusedCommentId=2" })
+      .mockResolvedValueOnce({ id: "3", issueKey: "DNIEM-42", url: "https://jira.example.com/browse/DNIEM-42?focusedCommentId=3" });
+
+    const result = await handleAddComments(
+      {
+        issueKey: "DNIEM-42",
+        comments: [
+          { body: "# [RAW]", bodyFormat: "markdown" },
+          { body: "# [VI]", bodyFormat: "markdown" },
+          { body: "# [ANALYSIS]", bodyFormat: "markdown" },
+        ],
+      },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0]?.text).toContain("all added");
+    expect(result.content[0]?.text).toContain("Success:** 3");
+  });
+
+  it("returns partial success with isError when one comment fails", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    vi.spyOn(JiraHttpClient.prototype, "addComment")
+      .mockResolvedValueOnce({ id: "1", issueKey: "DNIEM-42", url: "https://jira.example.com/browse/DNIEM-42?focusedCommentId=1" })
+      .mockRejectedValueOnce(new Error("Network error"));
+
+    const result = await handleAddComments(
+      {
+        issueKey: "DNIEM-42",
+        comments: [
+          { body: "first ok", bodyFormat: "plain" },
+          { body: "second fails", bodyFormat: "plain" },
+        ],
+      },
+      mockConfig as never
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("partial success");
+    expect(result.content[0]?.text).toContain("Success:** 1");
+    expect(result.content[0]?.text).toContain("Failed:** 1");
+  });
+
+  it("rejects invalid issueKey format", async () => {
+    const result = await handleAddComments(
+      { issueKey: "not-valid", comments: [{ body: "text" }] },
+      mockConfig as never
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain("Invalid input");
   });
 });
 
@@ -155,6 +448,92 @@ describe("transition/comment tool handlers", () => {
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("Comment added");
     expect(result.content[0].text).toContain("DNIEM-42");
+  });
+
+  it("sends ADF payload when bodyFormat is markdown (default)", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    const spy = vi.spyOn(JiraHttpClient.prototype, "addComment").mockResolvedValue({
+      id: "10002",
+      issueKey: "DNIEM-42",
+      url: "https://jira.example.com/browse/DNIEM-42",
+    });
+
+    await handleAddComment(
+      { issueKey: "DNIEM-42", body: "# Analysis\n\n- Point 1\n- Point 2" },
+      mockConfig as never
+    );
+
+    const calledPayload = spy.mock.calls[0]?.[1];
+    expect(calledPayload?.body).toMatchObject({ type: "doc", version: 1 });
+    // The ADF content should have a heading and a bulletList
+    const adfDoc = calledPayload?.body as { content: Array<{ type: string }> };
+    expect(adfDoc.content.some((n) => n.type === "heading")).toBe(true);
+    expect(adfDoc.content.some((n) => n.type === "bulletList")).toBe(true);
+  });
+
+  it("sends plain ADF paragraph when bodyFormat is plain", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    const spy = vi.spyOn(JiraHttpClient.prototype, "addComment").mockResolvedValue({
+      id: "10003",
+      issueKey: "DNIEM-42",
+      url: "https://jira.example.com/browse/DNIEM-42",
+    });
+
+    await handleAddComment(
+      { issueKey: "DNIEM-42", body: "# Not a heading in plain mode", bodyFormat: "plain" },
+      mockConfig as never
+    );
+
+    const calledPayload = spy.mock.calls[0]?.[1];
+    const adfDoc = calledPayload?.body as { content: Array<{ type: string }> };
+    // With plain format, everything becomes a single paragraph — no heading node
+    expect(adfDoc.content.every((n) => n.type === "paragraph")).toBe(true);
+  });
+
+  it("passes through ADF object when bodyFormat is adf", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    const spy = vi.spyOn(JiraHttpClient.prototype, "addComment").mockResolvedValue({
+      id: "10004",
+      issueKey: "DNIEM-42",
+      url: "https://jira.example.com/browse/DNIEM-42",
+    });
+
+    const rawAdf = { type: "doc", version: 1, content: [{ type: "paragraph", content: [{ type: "text", text: "raw" }] }] };
+
+    await handleAddComment(
+      { issueKey: "DNIEM-42", body: rawAdf, bodyFormat: "adf" },
+      mockConfig as never
+    );
+
+    const calledPayload = spy.mock.calls[0]?.[1];
+    expect(calledPayload?.body).toEqual(rawAdf);
+  });
+
+  it("sends ADF payload when bodyFormat is markdown for update-comment", async () => {
+    vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
+      cookieHeader: "JSESSIONID=abc",
+    });
+    const spy = vi.spyOn(JiraHttpClient.prototype, "updateComment").mockResolvedValue({
+      id: "10001",
+      issueKey: "DNIEM-42",
+      url: "https://jira.example.com/browse/DNIEM-42",
+    });
+
+    await handleUpdateComment(
+      { issueKey: "DNIEM-42", commentId: "10001", body: "## Updated\n\nContent here" },
+      mockConfig as never
+    );
+
+    const calledPayload = spy.mock.calls[0]?.[2];
+    expect(calledPayload?.body).toMatchObject({ type: "doc", version: 1 });
+    const adfDoc = calledPayload?.body as { content: Array<{ type: string }> };
+    expect(adfDoc.content.some((n) => n.type === "heading")).toBe(true);
   });
 
   it("formats transition results", async () => {

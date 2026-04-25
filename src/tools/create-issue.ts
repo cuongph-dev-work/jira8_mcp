@@ -11,6 +11,7 @@ import {
   buildCreateIssuePayload,
   buildCreateIssueResult,
 } from "../jira/create-issue.js";
+import { normalizeJiraBody } from "../jira/adf.js";
 import type { Config } from "../config.js";
 
 export const createIssueSchema = z.object({
@@ -18,6 +19,13 @@ export const createIssueSchema = z.object({
   fields: z
     .record(z.unknown())
     .describe("Jira fields keyed by standard field names or customfield IDs."),
+  descriptionFormat: z
+    .enum(["plain", "markdown", "adf"])
+    .optional()
+    .default("plain")
+    .describe(
+      "How to interpret the description field: \"plain\" (default, keeps backward compat), \"markdown\" (converts Markdown to ADF), \"adf\" (pass-through ADF object)."
+    ),
 });
 
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
@@ -32,10 +40,31 @@ export async function handleCreateIssue(
     return errorContent(`Invalid input: ${msg}`);
   }
 
-  const { issueTypeId, fields } = parsed.data as {
+  const { issueTypeId, fields, descriptionFormat } = parsed.data as {
     issueTypeId: IssueTypeId;
     fields: Record<string, unknown>;
+    descriptionFormat: "plain" | "markdown" | "adf";
   };
+
+  // Normalize description field if present
+  const normalizedFields = { ...fields };
+  const rawDescription = normalizedFields[FIELD.DESCRIPTION];
+  if (rawDescription != null) {
+    if (descriptionFormat === "plain" && typeof rawDescription !== "string") {
+      return errorContent("description must be a plain text string when descriptionFormat is \"plain\".");
+    }
+    if (descriptionFormat !== "plain") {
+      try {
+        normalizedFields[FIELD.DESCRIPTION] = normalizeJiraBody(
+          rawDescription as string,
+          descriptionFormat
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return errorContent(`description conversion failed: ${msg}`);
+      }
+    }
+  }
 
   let sessionCookies;
   try {
@@ -53,9 +82,9 @@ export async function handleCreateIssue(
 
   try {
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const payload = buildCreateIssuePayload(issueTypeId, fields);
+    const payload = buildCreateIssuePayload(issueTypeId, normalizedFields);
     const created = await client.createIssue(payload);
-    const rawSummary = fields[FIELD.SUMMARY];
+    const rawSummary = normalizedFields[FIELD.SUMMARY];
     const summary = typeof rawSummary === "string" ? rawSummary : "";
     const result = buildCreateIssueResult(cfg.JIRA_BASE_URL, created, issueTypeId, summary);
 
