@@ -186,7 +186,6 @@ describe("tool auth failure — isError response", () => {
     JIRA_BASE_URL: "https://jira.example.com",
     JIRA_SESSION_FILE: ".jira/session.json",
     JIRA_VALIDATE_PATH: "/rest/api/2/myself",
-    MCP_PORT: 3000,
     LOG_LEVEL: "info",
     PLAYWRIGHT_HEADLESS: false,
     PLAYWRIGHT_BROWSER: "chromium",

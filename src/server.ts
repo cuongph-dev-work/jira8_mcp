@@ -1,7 +1,7 @@
+#!/usr/bin/env node
 import "dotenv/config";
-import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { config } from "./config.js";
 import { ISSUE_TYPE } from "./jira/constants.js";
@@ -45,9 +45,6 @@ import { handleAddComments } from "./tools/add-comments.js";
 
 // ---------------------------------------------------------------------------
 // MCP server factory
-// A new McpServer is created per request (stateless Streamable HTTP pattern).
-// Calling server.connect() on a single shared instance across concurrent
-// requests causes lifecycle conflicts — each transport must own its server.
 // ---------------------------------------------------------------------------
 
 function createMcpServer(): McpServer {
@@ -799,64 +796,20 @@ Useful for migration workflows that add multiple structured comments (e.g. [RAW]
 }
 
 // ---------------------------------------------------------------------------
-// Express + Streamable HTTP transport
+// Stdio transport — one server, one connection (stdin/stdout)
 // ---------------------------------------------------------------------------
 
-const app = express();
-app.use(express.json());
-
-/**
- * MCP endpoint — stateless, per-request server+transport pair.
- *
- * Each incoming request gets a brand-new McpServer and StreamableHTTPServerTransport.
- * This is the correct pattern for stateless Streamable HTTP:
- * - No shared mutable transport state between concurrent requests.
- * - server.connect() is called exactly once per server instance.
- */
-app.all("/mcp", async (req, res) => {
+async function main(): Promise<void> {
   const server = createMcpServer();
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // stateless — no session header
-  });
+  const transport = new StdioServerTransport();
 
-  res.on("close", () => {
-    transport.close().catch(() => {});
-  });
+  await server.connect(transport);
 
-  try {
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (err) {
-    console.error("[MCP] Request error:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Internal server error" });
-    }
-  }
-});
+  // Log to stderr so stdout stays clean for MCP protocol
+  process.stderr.write(`[jira-run-mcp] Started (stdio). Jira: ${config.JIRA_BASE_URL}\n`);
+}
 
-// Health check
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", server: "jira-run-mcp", version: "0.1.0" });
-});
-
-// ---------------------------------------------------------------------------
-// Start
-// ---------------------------------------------------------------------------
-
-app.listen(config.MCP_PORT, () => {
-  console.log(`\n🚀 Jira MCP server running`);
-  console.log(`   Port     : ${config.MCP_PORT}`);
-  console.log(`   Endpoint : http://localhost:${config.MCP_PORT}/mcp`);
-  console.log(`   Health   : http://localhost:${config.MCP_PORT}/health`);
-  console.log(`   Jira     : ${config.JIRA_BASE_URL}\n`);
-});
-
-// Graceful shutdown
-process.on("SIGTERM", () => {
-  console.log("\n⏹  Shutting down...");
-  process.exit(0);
-});
-process.on("SIGINT", () => {
-  console.log("\n⏹  Shutting down...");
-  process.exit(0);
+main().catch((err) => {
+  process.stderr.write(`[jira-run-mcp] Fatal: ${String(err)}\n`);
+  process.exit(1);
 });

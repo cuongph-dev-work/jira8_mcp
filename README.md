@@ -1,12 +1,11 @@
 # jira-run-mcp
 
-An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bootstrap via Playwright and HTTP-first tool execution.
+An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bootstrap via Playwright and HTTP-first tool execution. Uses **stdio transport** — runs as a local subprocess managed by Claude Desktop, Cursor, or any MCP-compatible client.
 
 ## Stack
 
 - **TypeScript** — strict, ESM (NodeNext)
-- **@modelcontextprotocol/sdk** — MCP server + Streamable HTTP transport
-- **Express** — HTTP layer for the MCP endpoint
+- **@modelcontextprotocol/sdk** — MCP server + stdio transport
 - **Playwright** — interactive SSO login and session persistence
 - **Zod** — config and tool input validation
 - **Axios** — Jira REST API HTTP client
@@ -51,9 +50,11 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 
 ## Setup
 
-### 1. Install dependencies
+### 1. Clone and install
 
 ```bash
+git clone <repo-url>
+cd jira-run-mcp
 npm install
 ```
 
@@ -69,7 +70,7 @@ npx playwright install chromium
 cp .env.example .env
 ```
 
-Edit `.env` and set your Jira base URL:
+Edit `.env`:
 
 ```env
 JIRA_BASE_URL=https://jira.yourcompany.com
@@ -77,13 +78,13 @@ JIRA_BASE_URL=https://jira.yourcompany.com
 
 See `.env.example` for all available options.
 
-### 4. Authenticate
+### 4. Authenticate (first time)
 
 ```bash
 npm run jira-auth-login
 ```
 
-A browser window will open. Complete the SSO login manually. The session is saved to `.jira/session.json` automatically.
+A browser window will open. Complete the SSO login manually. Session is saved to `.jira/session.json`.
 
 ### 5. Verify session
 
@@ -91,16 +92,51 @@ A browser window will open. Complete the SSO login manually. The session is save
 npm run jira-auth-check
 ```
 
-### 6. Start the MCP server
+### 6. Build
 
 ```bash
-npm run dev
+npm run build
 ```
 
-The server will be available at:
+### 7. Add to Claude Desktop / Cursor
 
-- **MCP endpoint:** `http://localhost:3000/mcp`
-- **Health check:** `http://localhost:3000/health`
+Edit your MCP client config file:
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "command": "node",
+      "args": ["/absolute/path/to/jira-run-mcp/dist/server.js"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.yourcompany.com"
+      }
+    }
+  }
+}
+```
+
+**Cursor** (`~/.cursor/mcp.json` or `.cursor/mcp.json` in your project):
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "command": "node",
+      "args": ["/absolute/path/to/jira-run-mcp/dist/server.js"],
+      "env": {
+        "JIRA_BASE_URL": "https://jira.yourcompany.com"
+      }
+    }
+  }
+}
+```
+
+> **Tip:** If you have a `.env` file, you can omit the `env` block above and set `JIRA_BASE_URL` there instead. `dotenv` is loaded automatically at startup.
+
+Restart your MCP client after editing. No separate server process needed — the client spawns and manages the process automatically via stdio.
 
 ## CLI Utilities
 
@@ -595,7 +631,9 @@ src/
 ├── jira/
 │   ├── endpoints.ts       # URL builders (REST API v2)
 │   ├── mappers.ts         # Raw payload → typed output shapes
-│   ├── adf.ts             # Shared ADF normalization helpers
+│   ├── adf.ts             # ADF type interfaces + low-level builders
+│   ├── body-normalizer.ts # normalizeJiraBody (markdown/plain/adf → ADF)
+│   ├── markdown-to-adf.ts # Markdown AST → ADF converter (remark)
 │   ├── create-meta.ts     # Static issue create metadata helpers
 │   ├── create-issue.ts    # Create-issue validation and payload helpers
 │   ├── edit-meta.ts       # Live issue edit metadata normalization
@@ -678,7 +716,15 @@ npm run test:watch
 
 # Build for production
 npm run build
+
+# Run directly (dev mode, reads .env)
+npm run dev
 ```
+
+> `npm run dev` runs the server via `tsx` with stdio — useful for testing with `npx @modelcontextprotocol/inspector`:
+> ```bash
+> npx @modelcontextprotocol/inspector node dist/server.js
+> ```
 
 ## Error Codes
 

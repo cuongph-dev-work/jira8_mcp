@@ -18,11 +18,6 @@ const schema = z.object({
     .string()
     .default(".jira/session.json"),
 
-  MCP_PORT: z
-    .string()
-    .default("3000")
-    .transform((v) => parseInt(v, 10))
-    .pipe(z.number().int().min(1).max(65535)),
 
   LOG_LEVEL: z
     .enum(["debug", "info", "warn", "error"])

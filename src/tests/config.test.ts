@@ -19,7 +19,6 @@ describe("config", () => {
     expect(config.JIRA_BASE_URL).toBe("https://jira.example.com");
     expect(config.JIRA_VALIDATE_PATH).toBe("/rest/api/2/myself");
     expect(config.JIRA_SESSION_FILE).toBe(".jira/session.json");
-    expect(config.MCP_PORT).toBe(3000);
     expect(config.LOG_LEVEL).toBe("info");
     expect(config.PLAYWRIGHT_HEADLESS).toBe(false);
     expect(config.PLAYWRIGHT_BROWSER).toBe("chromium");
@@ -27,14 +26,12 @@ describe("config", () => {
 
   it("accepts overridden values", async () => {
     process.env.JIRA_BASE_URL = "https://jira.corp.net";
-    process.env.MCP_PORT = "8080";
     process.env.PLAYWRIGHT_HEADLESS = "true";
     process.env.PLAYWRIGHT_BROWSER = "firefox";
     process.env.LOG_LEVEL = "debug";
 
     const { config } = await import("../config.js");
 
-    expect(config.MCP_PORT).toBe(8080);
     expect(config.PLAYWRIGHT_HEADLESS).toBe(true);
     expect(config.PLAYWRIGHT_BROWSER).toBe("firefox");
     expect(config.LOG_LEVEL).toBe("debug");
