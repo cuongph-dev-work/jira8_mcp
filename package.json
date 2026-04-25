@@ -1,5 +1,5 @@
 {
-  "name": "@cuongph.dev.work/jira-mcp",
+  "name": "@cuongph.dev/jira-mcp",
   "version": "0.1.0",
   "description": "MCP server for internal Jira 8 via SSO session bootstrap with Playwright",
   "type": "module",
