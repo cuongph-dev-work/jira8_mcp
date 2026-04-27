@@ -3,7 +3,6 @@ import {
   normalizeJiraBody,
   type JiraBodyFormat,
 } from "../jira/body-normalizer.js";
-import { isAdfDocument } from "../jira/adf.js";
 import { navigationHint } from "../utils.js";
 
 // ---------------------------------------------------------------------------
@@ -11,8 +10,8 @@ import { navigationHint } from "../utils.js";
 // ---------------------------------------------------------------------------
 
 export const previewAdfSchema = z.object({
-  body: z.union([z.string(), z.record(z.unknown())]),
-  bodyFormat: z.enum(["plain", "markdown", "adf"]).default("markdown"),
+  body: z.string(),
+  bodyFormat: z.enum(["plain", "markdown"]).default("markdown"),
 });
 
 // ---------------------------------------------------------------------------
@@ -30,26 +29,34 @@ export async function handlePreviewAdf(
 
   const { body, bodyFormat } = parsed.data;
 
-  let adfDoc: ReturnType<typeof normalizeJiraBody>;
+  let wikiMarkup: string;
   try {
-    adfDoc = normalizeJiraBody(body, bodyFormat as JiraBodyFormat);
+    wikiMarkup = normalizeJiraBody(body, bodyFormat as JiraBodyFormat);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return errorContent(`Conversion failed: ${message}`);
   }
 
-  const warnings = collectWarnings(adfDoc);
-  const stats = collectStats(adfDoc);
+  const charCount = wikiMarkup.length;
+  const lineCount = wikiMarkup.split("\n").length;
+  const warnings: string[] = [];
+
+  if (charCount === 0) {
+    warnings.push("Resulting Wiki Markup is empty.");
+  }
+  if (charCount > 32_000) {
+    warnings.push(`Wiki Markup is large (${charCount} chars). Jira Server may have comment size limits.`);
+  }
 
   const lines: string[] = [
-    "## ADF Preview",
+    "## Jira Wiki Markup Preview",
     "",
     "### Stats",
     `| Metric | Value |`,
     `|---|---|`,
-    `| Top-level nodes | ${stats.nodeCount} |`,
-    `| Estimated text length | ${stats.textLength} chars |`,
-    `| Node types | ${stats.nodeTypes.join(", ")} |`,
+    `| Characters | ${charCount} |`,
+    `| Lines | ${lineCount} |`,
+    `| Format | ${bodyFormat} |`,
   ];
 
   if (warnings.length > 0) {
@@ -61,66 +68,20 @@ export async function handlePreviewAdf(
     lines.push("", "✅ No warnings.");
   }
 
-  lines.push("", "### ADF JSON", "```json", JSON.stringify(adfDoc, null, 2), "```");
+  lines.push("", "### Wiki Markup Output", "```", wikiMarkup, "```");
 
-  return { content: [{ type: "text", text: lines.join("\n") + navigationHint(
-    `\`jira_add_comment({issueKey: "<key>", body: <adf_json>, bodyFormat: "adf"})\` to post as a comment`,
-    `\`jira_create_issue({..., fields: {description: <adf_json>}})\` to use as issue description`,
-    `\`jira_update_issue_fields({issueKey: "<key>", fields: {description: <adf_json>}, bodyFormat: "adf"})\` to update description`,
-  ) }] };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-interface AdfStats {
-  nodeCount: number;
-  textLength: number;
-  nodeTypes: string[];
-}
-
-function collectStats(doc: { content?: Array<{ type: string }> }): AdfStats {
-  const content = doc.content ?? [];
-  const types = [...new Set(content.map((n) => n.type))];
-  const textLength = JSON.stringify(doc).length;
-  return { nodeCount: content.length, textLength, nodeTypes: types };
-}
-
-function collectWarnings(doc: {
-  content?: Array<{ type: string; content?: unknown[] }>;
-}): string[] {
-  const warnings: string[] = [];
-  const content = doc.content ?? [];
-
-  if (content.length === 0) {
-    warnings.push("ADF document has no content nodes.");
-  }
-
-  for (const node of content) {
-    if (node.type === "codeBlock") {
-      // Only warn if this looks like a table fallback (heuristic: many | chars)
-      const nodeText = JSON.stringify(node);
-      if (nodeText.includes(" | ") || nodeText.includes("\\n|")) {
-        warnings.push(
-          "A table was converted to a codeBlock (phase 1 fallback). Use real ADF table if rendering is important."
-        );
-        break;
-      }
-    }
-    if (node.type === "paragraph" && Array.isArray(node.content) && node.content.length === 0) {
-      warnings.push("One or more empty paragraph nodes detected (e.g. from thematic break).");
-      break;
-    }
-  }
-
-  // Warn on very large payloads
-  const jsonLen = JSON.stringify(doc).length;
-  if (jsonLen > 50_000) {
-    warnings.push(`ADF document is large (${jsonLen} chars). Consider splitting the comment.`);
-  }
-
-  return warnings;
+  return {
+    content: [
+      {
+        type: "text",
+        text: lines.join("\n") + navigationHint(
+          `\`jira_add_comment({issueKey: "<key>", body: "<wiki_markup>", bodyFormat: "plain"})\` to post as a comment`,
+          `\`jira_create_issue({..., fields: {description: "<wiki_markup>"}})\` to use as issue description`,
+          `\`jira_update_issue_fields({issueKey: "<key>", fields: {description: "<wiki_markup>"}})\` to update description`,
+        ),
+      },
+    ],
+  };
 }
 
 function errorContent(message: string) {

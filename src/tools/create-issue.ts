@@ -21,11 +21,11 @@ export const createIssueSchema = z.object({
     .record(z.unknown())
     .describe("Jira fields keyed by standard field names or customfield IDs."),
   descriptionFormat: z
-    .enum(["plain", "markdown", "adf"])
+    .enum(["plain", "markdown"])
     .optional()
     .default("plain")
     .describe(
-      "How to interpret the description field: \"plain\" (default, keeps backward compat), \"markdown\" (converts Markdown to ADF), \"adf\" (pass-through ADF object)."
+      'How to interpret the description field: "plain" (default, pass-through string/Wiki Markup), "markdown" (converts Markdown to Jira Wiki Markup).'
     ),
 });
 
@@ -44,26 +44,21 @@ export async function handleCreateIssue(
   const { issueTypeId, fields, descriptionFormat } = parsed.data as {
     issueTypeId: IssueTypeId;
     fields: Record<string, unknown>;
-    descriptionFormat: "plain" | "markdown" | "adf";
+    descriptionFormat: "plain" | "markdown";
   };
 
   // Normalize description field if present
   const normalizedFields = { ...fields };
   const rawDescription = normalizedFields[FIELD.DESCRIPTION];
-  if (rawDescription != null) {
-    if (descriptionFormat === "plain" && typeof rawDescription !== "string") {
-      return errorContent("description must be a plain text string when descriptionFormat is \"plain\".");
-    }
-    if (descriptionFormat !== "plain") {
-      try {
-        normalizedFields[FIELD.DESCRIPTION] = normalizeJiraBody(
-          rawDescription as string,
-          descriptionFormat
-        );
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return errorContent(`description conversion failed: ${msg}`);
-      }
+  if (rawDescription != null && descriptionFormat !== "plain") {
+    try {
+      normalizedFields[FIELD.DESCRIPTION] = normalizeJiraBody(
+        rawDescription as string,
+        descriptionFormat
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return errorContent(`description conversion failed: ${msg}`);
     }
   }
 

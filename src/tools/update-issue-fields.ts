@@ -15,11 +15,11 @@ export const updateIssueFieldsSchema = z.object({
     .regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key (e.g. PROJ-123)"),
   fields: z.record(z.unknown()),
   descriptionFormat: z
-    .enum(["plain", "markdown", "adf"])
+    .enum(["plain", "markdown"])
     .optional()
     .default("plain")
     .describe(
-      'How to interpret fields.description: "plain" (default, backward compat), "markdown" (converts Markdown to ADF), "adf" (pass-through ADF object).'
+      'How to interpret fields.description: "plain" (default, pass-through string/Wiki Markup), "markdown" (converts Markdown to Jira Wiki Markup).'
     ),
 });
 

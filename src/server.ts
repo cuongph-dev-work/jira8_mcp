@@ -279,15 +279,15 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_add_comment",
-    "Add a comment to a Jira issue. Supports Markdown-to-ADF conversion (default), plain text, or raw ADF.",
+    "Add a comment to a Jira issue. Supports Markdown-to-Jira-Wiki-Markup conversion (default) or plain text/Wiki Markup pass-through. Targets Jira Server v8.x.",
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
-      body: z.union([z.string(), z.record(z.unknown())]).describe("Comment body as plain text, Markdown string, or ADF object."),
+      body: z.string().describe("Comment body as plain text, Jira Wiki Markup, or Markdown string."),
       bodyFormat: z
-        .enum(["plain", "markdown", "adf"])
+        .enum(["plain", "markdown"])
         .optional()
         .default("markdown")
-        .describe('How to interpret body: "markdown" (default, converts Markdown to ADF), "plain" (wrap as-is), "adf" (pass-through ADF object).'),
+        .describe('How to interpret body: "markdown" (default, converts Markdown to Jira Wiki Markup), "plain" (pass-through as-is).'),
     },
     async (input) => {
       return handleAddComment(input, config);
@@ -759,18 +759,18 @@ RETURNS: filename, size, MIME type, and attachment ID for each uploaded file.`,
 
   server.tool(
     "jira_preview_adf",
-    `Preview how a body string will be converted to ADF before sending to Jira. No session required — purely local conversion.
+    `Preview how a body string will be converted to Jira Wiki Markup before sending to Jira Server. No session required — purely local conversion.
 
-Use this to validate Markdown or inspect the ADF payload before calling jira_add_comment, jira_update_comment, or jira_create_issue.
+Use this to validate Markdown or inspect the Wiki Markup output before calling jira_add_comment, jira_update_comment, or jira_create_issue.
 
-Returns: ADF JSON, node stats, and any conversion warnings.`,
+Returns: Jira Wiki Markup string, stats, and any conversion warnings.`,
     {
-      body: z.union([z.string(), z.record(z.unknown())]).describe("Body to convert: Markdown string, plain text, or ADF object."),
+      body: z.string().describe("Body to convert: Markdown string or plain text."),
       bodyFormat: z
-        .enum(["plain", "markdown", "adf"])
+        .enum(["plain", "markdown"])
         .optional()
         .default("markdown")
-        .describe('Format: "markdown" (default), "plain", or "adf".'),
+        .describe('Format: "markdown" (default, converts to Jira Wiki Markup), "plain" (pass-through).'),
     },
     async (input) => {
       return handlePreviewAdf(input);
@@ -781,7 +781,7 @@ Returns: ADF JSON, node stats, and any conversion warnings.`,
     "jira_add_comments",
     `Add multiple comments to a Jira issue sequentially in a single call.
 
-Each comment can have its own bodyFormat (markdown/plain/adf). Comments are added in order.
+Each comment can have its own bodyFormat (markdown/plain). Comments are added in order.
 On partial failure, returns success count and per-comment error details.
 
 Useful for migration workflows that add multiple structured comments (e.g. [RAW], [VI], [ANALYSIS]) at once.`,
@@ -790,12 +790,12 @@ Useful for migration workflows that add multiple structured comments (e.g. [RAW]
       comments: z
         .array(
           z.object({
-            body: z.union([z.string(), z.record(z.unknown())]).describe("Comment body as Markdown string, plain text, or ADF object."),
+            body: z.string().describe("Comment body as Markdown string or plain text/Wiki Markup."),
             bodyFormat: z
-              .enum(["plain", "markdown", "adf"])
+              .enum(["plain", "markdown"])
               .optional()
               .default("markdown")
-              .describe('Format: "markdown" (default), "plain", or "adf".'),
+              .describe('Format: "markdown" (default, converts to Jira Wiki Markup), "plain" (pass-through).'),
           })
         )
         .min(1)

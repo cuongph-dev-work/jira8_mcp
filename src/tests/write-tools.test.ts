@@ -212,32 +212,27 @@ describe("markdownToAdf converter", () => {
 });
 
 describe("normalizeJiraBody", () => {
-  it('wraps string in single paragraph when format is "plain"', () => {
-    const doc = normalizeJiraBody("hello", "plain");
-    expect(doc).toEqual(buildMinimalAdfDocument("hello"));
+  it('returns plain string as-is when format is "plain"', () => {
+    const result = normalizeJiraBody("hello", "plain");
+    expect(result).toBe("hello");
   });
 
-  it('parses markdown when format is "markdown" (default)', () => {
-    const doc = normalizeJiraBody("# Title", "markdown");
-    expect(doc.content[0]?.type).toBe("heading");
+  it('converts markdown to Jira Wiki Markup when format is "markdown" (default)', () => {
+    const result = normalizeJiraBody("# Title", "markdown");
+    expect(result).toBe("h1. Title");
   });
 
-  it('passes through valid ADF when format is "adf"', () => {
-    const adf = buildMinimalAdfDocument("Already ADF");
-    expect(normalizeJiraBody(adf, "adf")).toEqual(adf);
-  });
-
-  it('rejects invalid ADF object when format is "adf"', () => {
-    expect(() => normalizeJiraBody({ type: "wrong" }, "adf")).toThrow(/not a valid ADF/i);
+  it('throws invalidInput when format is "adf" (not supported on Jira Server)', () => {
+    expect(() => normalizeJiraBody("some text", "adf" as never)).toThrow(/not supported on Jira Server/i);
   });
 
   it('rejects non-string body with "plain" format', () => {
     expect(() => normalizeJiraBody({ type: "wrong" }, "plain")).toThrow(/must be a string/i);
   });
 
-  it('defaults to "markdown" format', () => {
-    const doc = normalizeJiraBody("# Heading");
-    expect(doc.content[0]?.type).toBe("heading");
+  it('defaults to "markdown" format and returns Wiki Markup string', () => {
+    const result = normalizeJiraBody("# Heading");
+    expect(result).toBe("h1. Heading");
   });
 });
 
@@ -246,19 +241,19 @@ describe("normalizeJiraBody", () => {
 // ---------------------------------------------------------------------------
 
 describe("jira_preview_adf handler", () => {
-  it("returns ADF JSON for markdown input", async () => {
+  it("returns Wiki Markup for markdown input", async () => {
     const { handlePreviewAdf } = await import("../tools/preview-adf.js");
     const result = await handlePreviewAdf({ body: "# Title\n\n- item", bodyFormat: "markdown" });
     expect(result.isError).toBeUndefined();
-    expect(result.content[0]?.text).toContain("ADF Preview");
-    expect(result.content[0]?.text).toContain('"type": "doc"');
+    expect(result.content[0]?.text).toContain("Wiki Markup Preview");
+    expect(result.content[0]?.text).toContain("h1. Title");
   });
 
-  it("returns stats including node types", async () => {
+  it("returns stats including char and line counts", async () => {
     const { handlePreviewAdf } = await import("../tools/preview-adf.js");
     const result = await handlePreviewAdf({ body: "# H1\n\nParagraph", bodyFormat: "markdown" });
-    expect(result.content[0]?.text).toContain("heading");
-    expect(result.content[0]?.text).toContain("paragraph");
+    expect(result.content[0]?.text).toContain("Characters");
+    expect(result.content[0]?.text).toContain("Lines");
   });
 
   it("returns error for invalid input", async () => {
@@ -267,11 +262,11 @@ describe("jira_preview_adf handler", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("includes table ADF node in output for GFM table", async () => {
+  it("converts GFM table to Jira Wiki Markup table format", async () => {
     const { handlePreviewAdf } = await import("../tools/preview-adf.js");
     const result = await handlePreviewAdf({ body: "| A | B |\n|---|---|\n| 1 | 2 |", bodyFormat: "markdown" });
-    expect(result.content[0]?.text).toContain('"type": "table"');
-    expect(result.content[0]?.text).toContain('"type": "tableRow"');
+    expect(result.content[0]?.text).toContain("||A||B||");
+    expect(result.content[0]?.text).toContain("|1|2|");
   });
 });
 
@@ -383,16 +378,16 @@ describe("isAdfDocument — strict validation", () => {
     expect(isAdfDocument({ type: "doc", version: 1 })).toBe(false);
   });
 
-  it("normalizeJiraBody adf-format error includes specific violations", () => {
+  it("normalizeJiraBody throws for 'adf' format (not supported on Jira Server)", () => {
     expect(() =>
-      normalizeJiraBody({ type: "doc", version: 2, content: [] }, "adf")
-    ).toThrow(/version must be 1/i);
+      normalizeJiraBody("some text", "adf" as never)
+    ).toThrow(/not supported on Jira Server/i);
   });
 
   it("normalizeJiraBody adf-format error for wrong type", () => {
     expect(() =>
-      normalizeJiraBody({ type: "paragraph", version: 1, content: [] }, "adf")
-    ).toThrow(/type must be "doc"/i);
+      normalizeJiraBody({ type: "paragraph" }, "adf" as never)
+    ).toThrow(/not supported on Jira Server/i);
   });
 });
 
@@ -499,7 +494,7 @@ describe("transition/comment tool handlers", () => {
     expect(result.content[0].text).toContain("DNIEM-42");
   });
 
-  it("sends ADF payload when bodyFormat is markdown (default)", async () => {
+  it("sends Wiki Markup string payload when bodyFormat is markdown (default)", async () => {
     vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
       cookieHeader: "JSESSIONID=abc",
     });
@@ -515,14 +510,13 @@ describe("transition/comment tool handlers", () => {
     );
 
     const calledPayload = spy.mock.calls[0]?.[1];
-    expect(calledPayload?.body).toMatchObject({ type: "doc", version: 1 });
-    // The ADF content should have a heading and a bulletList
-    const adfDoc = calledPayload?.body as { content: Array<{ type: string }> };
-    expect(adfDoc.content.some((n) => n.type === "heading")).toBe(true);
-    expect(adfDoc.content.some((n) => n.type === "bulletList")).toBe(true);
+    // Should be a plain string (Jira Wiki Markup), not an ADF JSON object
+    expect(typeof calledPayload?.body).toBe("string");
+    expect(calledPayload?.body).toContain("h1. Analysis");
+    expect(calledPayload?.body).toContain("* Point 1");
   });
 
-  it("sends plain ADF paragraph when bodyFormat is plain", async () => {
+  it("sends plain string as-is when bodyFormat is plain", async () => {
     vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
       cookieHeader: "JSESSIONID=abc",
     });
@@ -538,33 +532,24 @@ describe("transition/comment tool handlers", () => {
     );
 
     const calledPayload = spy.mock.calls[0]?.[1];
-    const adfDoc = calledPayload?.body as { content: Array<{ type: string }> };
-    // With plain format, everything becomes a single paragraph — no heading node
-    expect(adfDoc.content.every((n) => n.type === "paragraph")).toBe(true);
+    // With plain format, body is passed through unchanged
+    expect(calledPayload?.body).toBe("# Not a heading in plain mode");
   });
 
-  it("passes through ADF object when bodyFormat is adf", async () => {
+  it("rejects 'adf' bodyFormat (not supported on Jira Server)", async () => {
     vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
       cookieHeader: "JSESSIONID=abc",
     });
-    const spy = vi.spyOn(JiraHttpClient.prototype, "addComment").mockResolvedValue({
-      id: "10004",
-      issueKey: "DNIEM-42",
-      url: "https://jira.example.com/browse/DNIEM-42",
-    });
 
-    const rawAdf = { type: "doc", version: 1, content: [{ type: "paragraph", content: [{ type: "text", text: "raw" }] }] };
-
-    await handleAddComment(
-      { issueKey: "DNIEM-42", body: rawAdf, bodyFormat: "adf" },
+    const result = await handleAddComment(
+      { issueKey: "DNIEM-42", body: "some text", bodyFormat: "adf" as never },
       mockConfig as never
     );
 
-    const calledPayload = spy.mock.calls[0]?.[1];
-    expect(calledPayload?.body).toEqual(rawAdf);
+    expect(result.isError).toBe(true);
   });
 
-  it("sends ADF payload when bodyFormat is markdown for update-comment", async () => {
+  it("sends Wiki Markup string when bodyFormat is markdown for update-comment", async () => {
     vi.mocked(sessionManager.loadAndValidateSession).mockResolvedValue({
       cookieHeader: "JSESSIONID=abc",
     });
@@ -580,9 +565,8 @@ describe("transition/comment tool handlers", () => {
     );
 
     const calledPayload = spy.mock.calls[0]?.[2];
-    expect(calledPayload?.body).toMatchObject({ type: "doc", version: 1 });
-    const adfDoc = calledPayload?.body as { content: Array<{ type: string }> };
-    expect(adfDoc.content.some((n) => n.type === "heading")).toBe(true);
+    expect(typeof calledPayload?.body).toBe("string");
+    expect(calledPayload?.body).toContain("h2. Updated");
   });
 
   it("formats transition results", async () => {

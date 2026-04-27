@@ -11,12 +11,12 @@ import type { Config } from "../config.js";
 // ---------------------------------------------------------------------------
 
 const commentItemSchema = z.object({
-  body: z.union([z.string(), z.record(z.unknown())]).describe("Comment body text or ADF object."),
+  body: z.string().describe("Comment body as plain text or Markdown (converted to Jira Wiki Markup)."),
   bodyFormat: z
-    .enum(["plain", "markdown", "adf"])
+    .enum(["plain", "markdown"])
     .optional()
     .default("markdown")
-    .describe("How to interpret body: markdown (default), plain, or adf."),
+    .describe("How to interpret body: markdown (default, converts to Jira Wiki Markup) or plain."),
 });
 
 export const addCommentsSchema = z.object({
@@ -83,8 +83,8 @@ export async function handleAddComments(
   for (let i = 0; i < comments.length; i++) {
     const item = comments[i]!;
     try {
-      const adfBody = normalizeJiraBody(item.body, item.bodyFormat);
-      const comment = await client.addComment(issueKey, { body: adfBody });
+      const wikiBody = normalizeJiraBody(item.body, item.bodyFormat);
+      const comment = await client.addComment(issueKey, { body: wikiBody });
       results.push({ index: i, status: "ok", id: comment.id, url: comment.url });
     } catch (err: unknown) {
       hasError = true;

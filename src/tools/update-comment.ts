@@ -9,8 +9,8 @@ import type { Config } from "../config.js";
 export const updateCommentSchema = z.object({
   issueKey: z.string().regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key"),
   commentId: z.string().min(1, "commentId is required"),
-  body: z.union([z.string(), z.record(z.unknown())]),
-  bodyFormat: z.enum(["plain", "markdown", "adf"]).default("markdown"),
+  body: z.string(),
+  bodyFormat: z.enum(["plain", "markdown"]).default("markdown"),
 });
 
 export async function handleUpdateComment(
@@ -36,10 +36,10 @@ export async function handleUpdateComment(
   }
 
   try {
-    const adfBody = normalizeJiraBody(parsed.data.body, parsed.data.bodyFormat);
+    const wikiBody = normalizeJiraBody(parsed.data.body, parsed.data.bodyFormat);
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
     const comment = await client.updateComment(parsed.data.issueKey, parsed.data.commentId, {
-      body: adfBody,
+      body: wikiBody,
     });
 
     return {

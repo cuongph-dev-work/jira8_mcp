@@ -137,7 +137,7 @@ describe("JiraHttpClient write helpers", () => {
     });
 
     await expect(
-      client.addComment("DNIEM-42", { body: buildMinimalAdfDocument("Investigating") })
+      client.addComment("DNIEM-42", { body: "Investigating" })
     ).resolves.toEqual({
       id: "10001",
       issueKey: "DNIEM-42",
@@ -154,7 +154,7 @@ describe("JiraHttpClient write helpers", () => {
     });
 
     await expect(
-      client.updateComment("DNIEM-42", "10001", { body: buildMinimalAdfDocument("Updated") })
+      client.updateComment("DNIEM-42", "10001", { body: "Updated" })
     ).resolves.toEqual({
       id: "10001",
       issueKey: "DNIEM-42",

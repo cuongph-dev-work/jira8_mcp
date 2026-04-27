@@ -11,8 +11,8 @@ export const addCommentSchema = z.object({
     .string()
     .min(1, "issueKey is required")
     .regex(/^[A-Z][A-Z0-9_]+-\d+$/, "issueKey must be a valid Jira key (e.g. PROJ-123)"),
-  body: z.union([z.string(), z.record(z.unknown())]),
-  bodyFormat: z.enum(["plain", "markdown", "adf"]).default("markdown"),
+  body: z.string(),
+  bodyFormat: z.enum(["plain", "markdown"]).default("markdown"),
 });
 
 export async function handleAddComment(
@@ -40,9 +40,9 @@ export async function handleAddComment(
   }
 
   try {
-    const adfBody = normalizeJiraBody(parsed.data.body, parsed.data.bodyFormat);
+    const wikiBody = normalizeJiraBody(parsed.data.body, parsed.data.bodyFormat);
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const comment = await client.addComment(parsed.data.issueKey, { body: adfBody });
+    const comment = await client.addComment(parsed.data.issueKey, { body: wikiBody });
     return {
       content: [
         {

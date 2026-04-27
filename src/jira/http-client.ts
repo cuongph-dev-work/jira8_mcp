@@ -239,7 +239,7 @@ export class JiraHttpClient {
 
   async addComment(
     issueKey: string,
-    payload: { body: unknown }
+    payload: { body: string }
   ): Promise<JiraCommentResult> {
     const url = issueCommentUrl(this.baseUrl, issueKey);
     const res = await this.http.post(url, payload);
@@ -262,7 +262,7 @@ export class JiraHttpClient {
   async updateComment(
     issueKey: string,
     commentId: string,
-    payload: { body: unknown }
+    payload: { body: string }
   ): Promise<JiraCommentResult> {
     const url = issueCommentByIdUrl(this.baseUrl, issueKey, commentId);
     const res = await this.http.put(url, payload);
