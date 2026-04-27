@@ -4,7 +4,7 @@
 
 Return a compact, token-efficient context snapshot of a single Jira issue.
 
-Use this tool when you need a quick summary of an issue for reasoning or chaining, without the full verbosity of `jira_get_issue`. A single API call returns key identity, status, people, dates, time tracking, metadata counts, and an optional description excerpt.
+Use this tool when you need a quick summary of an issue for reasoning or chaining, without the full verbosity of `jira_get_issue`. By default it returns key identity, status, people, dates, time tracking, metadata counts, and an optional description excerpt. When `includeComments=true`, it also fetches a compact recent-comments section for intake and analysis use cases.
 
 ## When to Use
 
@@ -12,6 +12,7 @@ Use this tool when you need a quick summary of an issue for reasoning or chainin
 |----------|------------|
 | Quick status check before a transition | `jira_get_issue_context` |
 | Reasoning step in a multi-tool workflow | `jira_get_issue_context` |
+| Intake step for issue analysis with recent clarifications | `jira_get_issue_context` with `includeComments=true` |
 | Full details, attachments, bug fields | `jira_get_issue` |
 | Audit with comments, links, subtasks | `jira_get_audit_context` |
 
@@ -21,6 +22,9 @@ Use this tool when you need a quick summary of an issue for reasoning or chainin
 |-----------|------|----------|---------|-------------|
 | `issueKey` | `string` | ✅ | — | Jira issue key, e.g. `PROJ-123` |
 | `maxDescriptionLength` | `number` (0–2000) | ❌ | `500` | Max chars of description to include. Set `0` to omit entirely. |
+| `includeComments` | `boolean` | ❌ | `false` | Fetch and include recent comments. Set `true` for intake/analysis flows. |
+| `maxComments` | `number` (1–20) | ❌ | `5` | Max recent comments to include when `includeComments=true`. |
+| `includeHints` | `boolean` | ❌ | `false` | Append navigation hints. Enable only for final user-facing output. |
 
 ## Output
 
@@ -39,7 +43,9 @@ Parent: PROJ-10  |  Labels: backend, release-1.2  |  Sub-tasks: 3  |  Attachment
 Description (first 500 chars):
 When calling the /login endpoint with an expired token…
 
-💡 Next: `jira_get_issue({issueKey: "PROJ-42"})` for full detail
+Recent Comments (2):
+[101] Alice · 20 Apr 2026: Clarified rollback is not required for this release
+[102] Bob · 21 Apr 2026: FE should hide the button only after backend flag is present
 ```
 
 ### Included fields
@@ -51,7 +57,8 @@ When calling the /login endpoint with an expired token…
 - **Time tracking**: estimated, logged, remaining (only non-null values shown)
 - **Relations/metadata**: parent, epic link, labels, components, sub-task count, attachment count, resolution
 - **Description excerpt**: first `maxDescriptionLength` characters (with `…` if truncated); omitted when `maxDescriptionLength=0`
-- **Navigation hints**
+- **Recent comments**: compact one-line comments when `includeComments=true`
+- **Navigation hints**: appended only when `includeHints=true`
 
 ### Not included (use `jira_get_issue` for these)
 
@@ -68,6 +75,16 @@ When calling the /login endpoint with an expired token…
 { "issueKey": "PROJ-42" }
 ```
 
+### Intake / analysis call
+
+```json
+{
+  "issueKey": "PROJ-42",
+  "includeComments": true,
+  "maxComments": 5
+}
+```
+
 ### Omit description (pure metadata)
 
 ```json
@@ -80,9 +97,19 @@ When calling the /login endpoint with an expired token…
 { "issueKey": "PROJ-42", "maxDescriptionLength": 1000 }
 ```
 
+### Final user-facing output with hints
+
+```json
+{
+  "issueKey": "PROJ-42",
+  "includeComments": true,
+  "includeHints": true
+}
+```
+
 ## Navigation Hints
 
-The tool output includes:
+Navigation hints are omitted by default. When `includeHints=true`, the tool appends:
 
 ```
 💡 Next:
