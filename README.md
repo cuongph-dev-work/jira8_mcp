@@ -60,7 +60,7 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 Required once for the SSO browser login flow:
 
 ```bash
-npx playwright install chromium
+npx -y playwright install chromium
 ```
 
 ### Step 2 — Authenticate with Jira

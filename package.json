@@ -1,6 +1,6 @@
 {
   "name": "@cuongph.dev/jira-mcp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "MCP server for internal Jira 8 via SSO session bootstrap with Playwright",
   "repository": {
     "type": "git",
@@ -28,6 +28,8 @@
     "dist/jira",
     "dist/tools",
     "dist/types",
+    "dist/bootstrap.js",
+    "dist/bootstrap.d.ts",
     "dist/config.js",
     "dist/config.d.ts",
     "dist/errors.js",
