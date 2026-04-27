@@ -22,6 +22,7 @@ import { handleGetComments } from "./tools/get-comments.js";
 import { handleGetComponents } from "./tools/get-components.js";
 import { handleGetAuditContext } from "./tools/get-audit-context.js";
 import { handleGetIssue } from "./tools/get-issue.js";
+import { handleGetIssueContext } from "./tools/get-issue-context.js";
 import { handleGetIssueLinks } from "./tools/get-issue-links.js";
 import { handleGetCreateMeta } from "./tools/get-create-meta.js";
 import { handleGetEditMeta } from "./tools/get-edit-meta.js";
@@ -114,6 +115,57 @@ ATTACHMENTS:
     },
     async (input) => {
       return handleGetIssue(input, config);
+    }
+  );
+
+  // Tool: jira_get_issue_context
+  server.tool(
+    "jira_get_issue_context",
+    `Return a compact, token-efficient context snapshot of a single Jira issue.
+
+Use this tool when you need a quick summary of an issue for reasoning or chaining.
+Returns: header (key · type · status · priority), assignee, reporter, dates, time tracking,
+parent/epic/labels/components, sub-task & attachment counts, and a description excerpt.
+
+COMMENTS:
+- Set includeComments=true when using this as an intake step for issue analysis.
+  Requirement clarifications are often buried in comment threads — skipping them risks incorrect analysis.
+- Comments are fetched in parallel (no added latency). Each comment appears as a single compact line.
+
+HINTS:
+- Navigation hints are omitted by default (includeHints=false) to keep output compact.
+  Set includeHints=true only when this is the last step before presenting results to the user.`,
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      maxDescriptionLength: z
+        .number()
+        .int()
+        .min(0)
+        .max(2000)
+        .optional()
+        .default(500)
+        .describe("Max chars of description to include (0–2000, default 500). Set 0 to omit."),
+      includeComments: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Fetch and include recent comments (default false). Set true for intake/analysis use cases."),
+      maxComments: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .default(5)
+        .describe("Max comments to include when includeComments=true (1–20, default 5)."),
+      includeHints: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Append navigation hints (default false). Enable only for final user-facing output."),
+    },
+    async (input) => {
+      return handleGetIssueContext(input, config);
     }
   );
 
