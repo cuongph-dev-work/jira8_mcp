@@ -1,5 +1,4 @@
 import { invalidInput } from "../errors.js";
-import { normalizeAdfValue } from "./adf.js";
 import { CUSTOM_FIELD, FIELD } from "./constants.js";
 
 export const UPDATEABLE_FIELDS = [
@@ -59,12 +58,8 @@ export function buildUpdateIssuePayload(
 }
 
 function normalizeUpdateFields(fields: Record<string, unknown>): Record<string, unknown> {
-  if (fields[FIELD.DESCRIPTION] == null) {
-    return fields;
-  }
-
-  return {
-    ...fields,
-    [FIELD.DESCRIPTION]: normalizeAdfValue(fields[FIELD.DESCRIPTION]),
-  };
+  // Jira Server 8.x: description is a plain string (Wiki Markup), not ADF.
+  // Pass through as-is — no conversion needed here.
+  // For Markdown → Wiki Markup conversion, use the tool layer (update-issue-fields.ts).
+  return fields;
 }

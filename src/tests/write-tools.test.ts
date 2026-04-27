@@ -413,7 +413,7 @@ describe("update issue helpers", () => {
     expect(UPDATEABLE_FIELDS).not.toContain(FIELD.PROJECT);
   });
 
-  it("builds an update payload and normalizes description to ADF", () => {
+  it("builds an update payload and passes description as plain string (Jira Server 8.x)", () => {
     const payload = buildUpdateIssuePayload({
       [FIELD.SUMMARY]: "Updated summary",
       [FIELD.DESCRIPTION]: "Updated description",
@@ -423,7 +423,7 @@ describe("update issue helpers", () => {
     expect(payload).toEqual({
       fields: {
         [FIELD.SUMMARY]: "Updated summary",
-        [FIELD.DESCRIPTION]: buildMinimalAdfDocument("Updated description"),
+        [FIELD.DESCRIPTION]: "Updated description",
         [FIELD.COMPONENTS]: [{ id: COMPONENT.QA }],
       },
     });

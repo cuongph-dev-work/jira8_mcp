@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { loadAndValidateSession } from "../auth/session-manager.js";
 import { isMcpError } from "../errors.js";
-import { normalizeAdfValue } from "../jira/adf.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import { navigationHint } from "../utils.js";
 import {
@@ -20,7 +19,7 @@ const transitionItemSchema = z.object({
   issueKey: issueKeySchema,
   transitionId: z.string().min(1).optional(),
   transitionName: z.string().min(1).optional(),
-  comment: z.union([z.string(), z.record(z.unknown())]).optional(),
+  comment: z.string().optional(),
   fields: z.record(z.unknown()).optional(),
 });
 
@@ -83,7 +82,7 @@ export async function handleBulkTransitionIssues(
 
       if (item.comment !== undefined) {
         payload.update = {
-          comment: [{ add: { body: normalizeAdfValue(item.comment) } }],
+          comment: [{ add: { body: item.comment } }],
         };
       }
       if (item.fields) {
