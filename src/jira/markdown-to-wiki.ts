@@ -47,7 +47,9 @@ export function markdownToWiki(markdown: string): string {
 // ---------------------------------------------------------------------------
 
 function convertBlocks(nodes: RootContent[]): string {
-  return nodes.map(convertBlock).filter(Boolean).join("\n");
+  // Use double newline between block-level nodes so Jira renders
+  // headings, paragraphs, and lists as visually separate sections.
+  return nodes.map(convertBlock).filter(Boolean).join("\n\n");
 }
 
 function convertBlock(node: RootContent): string {
@@ -149,10 +151,16 @@ function convertInline(children: PhrasingContent[]): string {
 function convertPhrasingNode(node: PhrasingContent): string {
   switch (node.type) {
     case "text":
-      return node.value;
+      // Escape `[` and `]` so Jira doesn't treat plain-text brackets
+      // like `[NON-BLOCKER]` as link markup.
+      return node.value.replace(/\[/g, "\\[").replace(/\]/g, "\\]");
 
-    case "inlineCode":
-      return `{{${node.value}}}`;
+    case "inlineCode": {
+      // Escape `{` and `}` inside monospace so they don't conflict with
+      // Jira macros (e.g. `{dataFetchedAt}` would otherwise produce `{{{dataFetchedAt}}}`).
+      const escaped = node.value.replace(/[{}]/g, "\\$&");
+      return `{{${escaped}}}`;
+    }
 
     case "strong":
       return `*${convertInline(node.children)}*`;

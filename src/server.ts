@@ -44,6 +44,27 @@ import { handlePreviewAdf } from "./tools/preview-adf.js";
 import { handleAddComments } from "./tools/add-comments.js";
 
 // ---------------------------------------------------------------------------
+// Tool confirmation instructions (appended to write/destructive tool descriptions)
+// ---------------------------------------------------------------------------
+
+/** Append to tools that create or modify data (comments, worklogs, fields, links, etc.) */
+const WRITE_CONFIRMATION = `
+
+⚠️ WRITE ACTION: Before calling this tool, you MUST:
+1. Show the user exactly what will be written/changed (preview the content).
+2. Get explicit user approval (e.g. "yes", "go ahead", "confirm").
+3. Do NOT call this tool until the user confirms.`;
+
+/** Append to tools that permanently delete data */
+const DESTRUCTIVE_CONFIRMATION = `
+
+🔴 DESTRUCTIVE ACTION — IRREVERSIBLE: Before calling this tool, you MUST:
+1. Clearly warn the user that this action cannot be undone.
+2. Show what will be deleted and any side effects.
+3. Get explicit user approval (e.g. "yes, delete it").
+4. Do NOT call this tool until the user confirms.`;
+
+// ---------------------------------------------------------------------------
 // MCP server factory
 // ---------------------------------------------------------------------------
 
@@ -244,7 +265,7 @@ WORK ATTRIBUTES:
 - process: Project Management, Requirement, Design_UI/UX, Design Basic, Design Detail, Coding, Test UT, Test IT, Test Other, Deployment, UAT, Configuaration Management, Other_billable, Other_unbillable
 - typeOfWork: Create, Correct, Study, Review, Test, Translate
 
-Returns: confirmation with Tempo worklog ID, issue details, and logged duration.`,
+Returns: confirmation with Tempo worklog ID, issue details, and logged duration.` + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key to log work against, e.g. PROJ-123"),
       timeSpent: z
@@ -279,7 +300,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_add_comment",
-    "Add a comment to a Jira issue. Supports Markdown-to-Jira-Wiki-Markup conversion (default) or plain text/Wiki Markup pass-through. Targets Jira Server v8.x.",
+    "Add a comment to a Jira issue. Supports Markdown-to-Jira-Wiki-Markup conversion (default) or plain text/Wiki Markup pass-through. Targets Jira Server v8.x." + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       body: z.string().describe("Comment body as plain text, Jira Wiki Markup, or Markdown string."),
@@ -308,7 +329,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_transition_issue",
-    "Transition a Jira issue by transitionId or transitionName, with optional comment and field updates.",
+    "Transition a Jira issue by transitionId or transitionName, with optional comment and field updates." + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       transitionId: z.string().optional().describe("Transition ID from jira_get_transitions. Provide exactly one of transitionId or transitionName."),
@@ -357,7 +378,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_update_issue_fields",
-    "Update fields on an existing Jira issue. Call jira_get_edit_meta first to discover which fields are editable. description supports Markdown-to-ADF via descriptionFormat.",
+    "Update fields on an existing Jira issue. Call jira_get_edit_meta first to discover which fields are editable. description supports Markdown-to-ADF via descriptionFormat." + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       fields: z.record(z.unknown()).describe("Curated set of updateable Jira fields."),
@@ -386,7 +407,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_bulk_update_issue_fields",
-    "Update fields on multiple issues. dryRun is required; only writes when dryRun=false.",
+    "Update fields on multiple issues. dryRun is required; only writes when dryRun=false." + WRITE_CONFIRMATION,
     {
       dryRun: z.boolean().describe("Required safety flag. true previews only; false applies updates."),
       issues: z
@@ -406,7 +427,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_link_issues",
-    "Create a Jira issue link between two issues, with an optional comment.",
+    "Create a Jira issue link between two issues, with an optional comment." + WRITE_CONFIRMATION,
     {
       inwardIssueKey: z.string().describe("Source/inward Jira issue key"),
       outwardIssueKey: z.string().describe("Target/outward Jira issue key"),
@@ -442,7 +463,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_create_subtask",
-    "Create a subtask under a parent issue. issueTypeId is explicit because subtask type IDs vary by Jira project.",
+    "Create a subtask under a parent issue. issueTypeId is explicit because subtask type IDs vary by Jira project." + WRITE_CONFIRMATION,
     {
       parentIssueKey: z.string().describe("Parent Jira issue key, e.g. PROJ-123"),
       issueTypeId: z.string().describe("Jira subtask issue type ID for this project."),
@@ -455,7 +476,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_clone_issue",
-    "Clone an issue by copying core fields, with optional summary prefix and field overrides.",
+    "Clone an issue by copying core fields, with optional summary prefix and field overrides." + WRITE_CONFIRMATION,
     {
       sourceIssueKey: z.string().describe("Source Jira issue key, e.g. PROJ-123"),
       summaryPrefix: z.string().optional().default("Clone of").describe("Prefix for cloned summary."),
@@ -468,7 +489,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_bulk_link_issues",
-    "Create multiple issue links sequentially and return per-link success/error status.",
+    "Create multiple issue links sequentially and return per-link success/error status." + WRITE_CONFIRMATION,
     {
       links: z
         .array(
@@ -490,7 +511,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_bulk_transition_issues",
-    "Transition multiple issues sequentially. dryRun is required; only writes when dryRun=false.",
+    "Transition multiple issues sequentially. dryRun is required; only writes when dryRun=false." + WRITE_CONFIRMATION,
     {
       dryRun: z.boolean().describe("Required safety flag. true resolves/previews only; false applies transitions."),
       issues: z
@@ -513,7 +534,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_assign_issue",
-    "Assign a Jira issue to a user. MUST provide at least one of assigneeName or assigneeKey. Use jira_find_user to discover the correct values.",
+    "Assign a Jira issue to a user. MUST provide at least one of assigneeName or assigneeKey. Use jira_find_user to discover the correct values." + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       assigneeName: z.string().optional().describe("Jira username/name for assignment"),
@@ -549,7 +570,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_update_comment",
-    "Update an existing Jira issue comment. Supports Markdown-to-ADF conversion (default), plain text, or raw ADF.",
+    "Update an existing Jira issue comment. Supports Markdown-to-ADF conversion (default), plain text, or raw ADF." + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       commentId: z.string().describe("Jira comment ID."),
@@ -567,7 +588,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 
   server.tool(
     "jira_delete_comment",
-    "Delete an existing Jira issue comment by ID.",
+    "Delete an existing Jira issue comment by ID." + DESTRUCTIVE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       commentId: z.string().describe("Jira comment ID."),
@@ -584,7 +605,7 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
 When to use: only when the user explicitly asks to delete an issue.
 Do NOT use for: closing, resolving, or archiving issues — use jira_transition_issue instead.
 
-If the issue has subtasks, set deleteSubtasks=true or Jira will reject the request.`,
+If the issue has subtasks, set deleteSubtasks=true or Jira will reject the request.` + DESTRUCTIVE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key to delete, e.g. PROJ-123"),
       deleteSubtasks: z
@@ -600,7 +621,7 @@ If the issue has subtasks, set deleteSubtasks=true or Jira will reject the reque
 
   server.tool(
     "jira_update_worklog",
-    "Update a Tempo worklog by ID. Supports date, duration, comment, and known Tempo attributes.",
+    "Update a Tempo worklog by ID. Supports date, duration, comment, and known Tempo attributes." + WRITE_CONFIRMATION,
     {
       worklogId: z.string().describe("Tempo worklog ID."),
       timeSpent: z.string().optional().describe('Duration string, e.g. "2h", "30m", "1d 4h".'),
@@ -616,7 +637,7 @@ If the issue has subtasks, set deleteSubtasks=true or Jira will reject the reque
 
   server.tool(
     "jira_delete_worklog",
-    "Delete a Tempo worklog by ID.",
+    "Delete a Tempo worklog by ID." + DESTRUCTIVE_CONFIRMATION,
     {
       worklogId: z.string().describe("Tempo worklog ID."),
     },
@@ -627,7 +648,7 @@ If the issue has subtasks, set deleteSubtasks=true or Jira will reject the reque
 
   server.tool(
     "jira_add_attachment",
-    "Upload a local workspace file as a Jira issue attachment.",
+    "Upload a local workspace file as a Jira issue attachment." + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       filePath: z.string().describe("Path to a local file inside the current workspace."),
@@ -649,7 +670,7 @@ ENCODING:
 
 FILENAME must include a file extension (e.g. "report.md", "data.csv"). MIME type is inferred from the extension if not provided.
 
-RETURNS: filename, size, MIME type, and attachment ID for each uploaded file.`,
+RETURNS: filename, size, MIME type, and attachment ID for each uploaded file.` + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       filename: z
@@ -716,7 +737,7 @@ RETURNS: filename, size, MIME type, and attachment ID for each uploaded file.`,
   // Tool: jira_create_issue
   server.tool(
     "jira_create_issue",
-    "Create a Jira issue. IMPORTANT: call jira_get_create_meta first to discover the required and allowed fields for the target project and issue type — required fields differ per project. Then pass those fields here.",
+    "Create a Jira issue. IMPORTANT: call jira_get_create_meta first to discover the required and allowed fields for the target project and issue type — required fields differ per project. Then pass those fields here." + WRITE_CONFIRMATION,
     {
       issueTypeId: z
         .nativeEnum(ISSUE_TYPE)
@@ -784,7 +805,7 @@ Returns: Jira Wiki Markup string, stats, and any conversion warnings.`,
 Each comment can have its own bodyFormat (markdown/plain). Comments are added in order.
 On partial failure, returns success count and per-comment error details.
 
-Useful for migration workflows that add multiple structured comments (e.g. [RAW], [VI], [ANALYSIS]) at once.`,
+Useful for migration workflows that add multiple structured comments (e.g. [RAW], [VI], [ANALYSIS]) at once.` + WRITE_CONFIRMATION,
     {
       issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
       comments: z
