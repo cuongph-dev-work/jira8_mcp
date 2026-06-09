@@ -77,9 +77,14 @@ describe("extractCookies", () => {
 // ---------------------------------------------------------------------------
 
 describe("loadAndValidateSession", () => {
-  // We mock the session-store and axios at the module level
+  // We mock the session-store, playwright-auth, and axios at the module level
   vi.mock("../auth/session-store.js", () => ({
     readSession: vi.fn(),
+  }));
+
+  vi.mock("../auth/playwright-auth.js", () => ({
+    runAutomaticLogin: vi.fn(),
+    validateCandidateSession: vi.fn(),
   }));
 
   vi.mock("axios", async () => {
@@ -109,5 +114,48 @@ describe("loadAndValidateSession", () => {
     await expect(
       loadAndValidateSession(".jira/session.json", BASE_URL, "/rest/api/2/myself")
     ).rejects.toMatchObject({ code: "AUTH_REQUIRED" });
+  });
+
+  it("attempts auto-login when credentials are configured and no session file exists", async () => {
+    const playwrightAuth = await import("../auth/playwright-auth.js");
+    const runAutomaticLoginMock = vi.mocked(playwrightAuth.runAutomaticLogin);
+    runAutomaticLoginMock.mockResolvedValue();
+
+    const { readSession } = await import("../auth/session-store.js");
+    const readSessionMock = vi.mocked(readSession);
+    
+    const validSession = {
+      savedAt: new Date().toISOString(),
+      baseUrl: BASE_URL,
+      storageState: {
+        cookies: [{ name: "JSESSIONID", value: "new_session_id", domain: "jira.example.com", path: "/", expires: -1, httpOnly: true, secure: true, sameSite: "Lax" as const }],
+        origins: [],
+      },
+    };
+    
+    readSessionMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(validSession);
+
+    process.env.JIRA_EMAIL = "test@example.com";
+    process.env.JIRA_PASSWORD = "password";
+
+    const { loadAndValidateSession } = await import("../auth/session-manager.js");
+
+    const result = await loadAndValidateSession(".jira/session.json", BASE_URL, "/rest/api/2/myself");
+    
+    expect(runAutomaticLoginMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: BASE_URL,
+        sessionFilePath: ".jira/session.json",
+        email: "test@example.com",
+        password: "password",
+        headless: true,
+      })
+    );
+    expect(result.cookieHeader).toContain("JSESSIONID=new_session_id");
+
+    delete process.env.JIRA_EMAIL;
+    delete process.env.JIRA_PASSWORD;
   });
 });

@@ -2,7 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { searchWorklogsSchema, handleSearchWorklogs } from "../tools/search-worklogs.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import { loadAndValidateSession } from "../auth/session-manager.js";
-import { config } from "../config.js";
+
+const mockConfig = {
+  JIRA_BASE_URL: "https://jira.example.com",
+  JIRA_SESSION_FILE: ".jira/session.json",
+  JIRA_VALIDATE_PATH: "/rest/api/2/myself" as const,
+  ATTACHMENT_WORKSPACE: "downloads",
+  LOG_LEVEL: "info" as const,
+  PLAYWRIGHT_HEADLESS: false as const,
+  PLAYWRIGHT_BROWSER: "chromium" as const,
+};
 
 vi.mock("../auth/session-manager.js", () => ({
   loadAndValidateSession: vi.fn(),
@@ -83,7 +92,7 @@ describe("handleSearchWorklogs", () => {
 
     const result = await handleSearchWorklogs(
       { dateFrom: "2026-04-20", dateTo: "2026-04-26", workers: ["ducnpp@runsystem.net"] },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
@@ -101,7 +110,7 @@ describe("handleSearchWorklogs", () => {
 
     const result = await handleSearchWorklogs(
       { dateFrom: "2026-04-20", dateTo: "2026-04-26", workers: ["nobody@example.com"] },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
@@ -117,7 +126,7 @@ describe("handleSearchWorklogs", () => {
 
     const result = await handleSearchWorklogs(
       { dateFrom: "2026-04-20", dateTo: "2026-04-26", workers: ["user@example.com"] },
-      config
+      mockConfig
     );
 
     expect(result.content[0].text).toContain("5.00h"); // 18000s / 3600
@@ -125,7 +134,7 @@ describe("handleSearchWorklogs", () => {
   });
 
   it("returns validation error for bad input", async () => {
-    const result = await handleSearchWorklogs({ dateFrom: "bad", dateTo: "also-bad", workers: [] }, config);
+    const result = await handleSearchWorklogs({ dateFrom: "bad", dateTo: "also-bad", workers: [] }, mockConfig);
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Invalid input");
   });

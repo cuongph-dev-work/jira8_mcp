@@ -2,7 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getTimesheetApprovalLogSchema, handleGetTimesheetApprovalLog } from "../tools/get-timesheet-approval-log.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import { loadAndValidateSession } from "../auth/session-manager.js";
-import { config } from "../config.js";
+
+const mockConfig = {
+  JIRA_BASE_URL: "https://jira.example.com",
+  JIRA_SESSION_FILE: ".jira/session.json",
+  JIRA_VALIDATE_PATH: "/rest/api/2/myself" as const,
+  ATTACHMENT_WORKSPACE: "downloads",
+  LOG_LEVEL: "info" as const,
+  PLAYWRIGHT_HEADLESS: false as const,
+  PLAYWRIGHT_BROWSER: "chromium" as const,
+};
 
 // Hoisted mocks
 vi.mock("../auth/session-manager.js", () => ({
@@ -94,7 +103,7 @@ describe("handleGetTimesheetApprovalLog", () => {
 
     const result = await handleGetTimesheetApprovalLog(
       { teamId: 115, periodStartDate: "2026-04-20" },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
@@ -111,7 +120,7 @@ describe("handleGetTimesheetApprovalLog", () => {
 
     const result = await handleGetTimesheetApprovalLog(
       { teamId: 115, periodStartDate: "2026-04-20" },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
@@ -128,7 +137,7 @@ describe("handleGetTimesheetApprovalLog", () => {
 
     const result = await handleGetTimesheetApprovalLog(
       { teamId: 115, periodStartDate: "2026-04-20" },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
@@ -141,7 +150,7 @@ describe("handleGetTimesheetApprovalLog", () => {
   it("returns validation error for bad input", async () => {
     const result = await handleGetTimesheetApprovalLog(
       { teamId: -1, periodStartDate: "bad-date" },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBe(true);

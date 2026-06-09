@@ -13,6 +13,9 @@ const schema = z.object({
     .string()
     .url("JIRA_BASE_URL must be a valid URL (e.g. https://jira.yourcompany.com)"),
 
+  JIRA_EMAIL: z.string().optional(),
+  JIRA_PASSWORD: z.string().optional(),
+
   LOG_LEVEL: z
     .enum(["debug", "info", "warn", "error"])
     .default("info"),

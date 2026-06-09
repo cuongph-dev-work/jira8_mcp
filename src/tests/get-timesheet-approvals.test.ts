@@ -2,8 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getTimesheetApprovalsSchema, handleGetTimesheetApprovals } from "../tools/get-timesheet-approvals.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import { loadAndValidateSession } from "../auth/session-manager.js";
-import { config } from "../config.js";
 import { McpError } from "../errors.js";
+
+const mockConfig = {
+  JIRA_BASE_URL: "https://jira.example.com",
+  JIRA_SESSION_FILE: ".jira/session.json",
+  JIRA_VALIDATE_PATH: "/rest/api/2/myself" as const,
+  ATTACHMENT_WORKSPACE: "downloads",
+  LOG_LEVEL: "info" as const,
+  PLAYWRIGHT_HEADLESS: false as const,
+  PLAYWRIGHT_BROWSER: "chromium" as const,
+};
 
 // Hoisted mocks
 vi.mock("../auth/session-manager.js", () => ({
@@ -53,7 +62,7 @@ describe("handleGetTimesheetApprovals", () => {
 
     const result = await handleGetTimesheetApprovals(
       { teamId: 484, periodStartDate: "2026-04-27" },
-      config
+      mockConfig
     );
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("SESSION_EXPIRED");
@@ -78,7 +87,7 @@ describe("handleGetTimesheetApprovals", () => {
 
     const result = await handleGetTimesheetApprovals(
       { teamId: 484, periodStartDate: "2026-04-27" },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
