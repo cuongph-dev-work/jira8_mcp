@@ -2,7 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { actOnTimesheetApprovalSchema, handleActOnTimesheetApproval } from "../tools/act-on-timesheet-approval.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import { loadAndValidateSession } from "../auth/session-manager.js";
-import { config } from "../config.js";
+
+const mockConfig = {
+  JIRA_BASE_URL: "https://jira.example.com",
+  JIRA_SESSION_FILE: ".jira/session.json",
+  JIRA_VALIDATE_PATH: "/rest/api/2/myself" as const,
+  ATTACHMENT_WORKSPACE: "downloads",
+  LOG_LEVEL: "info" as const,
+  PLAYWRIGHT_HEADLESS: false as const,
+  PLAYWRIGHT_BROWSER: "chromium" as const,
+};
 
 vi.mock("../auth/session-manager.js", () => ({
   loadAndValidateSession: vi.fn(),
@@ -101,7 +110,7 @@ describe("handleActOnTimesheetApproval", () => {
 
     const result = await handleActOnTimesheetApproval(
       { userKey: "lapdq@runsystem.net", periodDateFrom: "2026-04-20", action: "approve", comment: "ok" },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
@@ -130,7 +139,7 @@ describe("handleActOnTimesheetApproval", () => {
 
     const result = await handleActOnTimesheetApproval(
       { userKey: "lapdq@runsystem.net", periodDateFrom: "2026-04-20", action: "reject", comment: "" },
-      config
+      mockConfig
     );
 
     expect(result.isError).toBeUndefined();
@@ -141,7 +150,7 @@ describe("handleActOnTimesheetApproval", () => {
   it("returns validation error for bad input", async () => {
     const result = await handleActOnTimesheetApproval(
       { userKey: "", periodDateFrom: "bad", action: "approve" },
-      config
+      mockConfig
     );
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("Invalid input");

@@ -2,7 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { searchTempoTeamsSchema, handleSearchTempoTeams } from "../tools/search-tempo-teams.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import { loadAndValidateSession } from "../auth/session-manager.js";
-import { config } from "../config.js";
+
+const mockConfig = {
+  JIRA_BASE_URL: "https://jira.example.com",
+  JIRA_SESSION_FILE: ".jira/session.json",
+  JIRA_VALIDATE_PATH: "/rest/api/2/myself" as const,
+  ATTACHMENT_WORKSPACE: "downloads",
+  LOG_LEVEL: "info" as const,
+  PLAYWRIGHT_HEADLESS: false as const,
+  PLAYWRIGHT_BROWSER: "chromium" as const,
+};
 
 // Hoisted mocks
 vi.mock("../auth/session-manager.js", () => ({
@@ -53,7 +62,7 @@ describe("handleSearchTempoTeams", () => {
       }
     ]);
 
-    const result = await handleSearchTempoTeams({ query: "Gensai" }, config);
+    const result = await handleSearchTempoTeams({ query: "Gensai" }, mockConfig);
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("GensaiPlatform");
@@ -66,7 +75,7 @@ describe("handleSearchTempoTeams", () => {
     vi.mocked(loadAndValidateSession).mockResolvedValue({ cookieHeader: "cookie" });
     mockSearchTempoTeams.mockResolvedValue([]);
 
-    const result = await handleSearchTempoTeams({ query: "xyz" }, config);
+    const result = await handleSearchTempoTeams({ query: "xyz" }, mockConfig);
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("No Tempo teams found");

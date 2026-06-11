@@ -156,6 +156,188 @@ function isLoginPage(body: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Automatic background SSO/credential login
+// ---------------------------------------------------------------------------
+
+/**
+ * Launches a browser in headless mode, navigates to the Jira base URL,
+ * and attempts to fill the email/username and password using common login selectors.
+ *
+ * Saves the session only on successful validation.
+ */
+export async function runAutomaticLogin(options: {
+  baseUrl: string;
+  sessionFilePath: string;
+  email: string;
+  password: string;
+  headless: boolean;
+  browser: BrowserEngine;
+  validatePath?: string;
+}): Promise<void> {
+  const {
+    baseUrl,
+    sessionFilePath,
+    email,
+    password,
+    headless,
+    browser: browserName,
+    validatePath = "/rest/api/2/myself",
+  } = options;
+
+  console.log(`\n🔐 Launching ${browserName} for automatic background login...\n`);
+  console.log(`   Base URL : ${baseUrl}`);
+  console.log(`   Session  : ${sessionFilePath}\n`);
+
+  const browserFactory = getBrowserFactory(browserName);
+  const browserInstance = await browserFactory.launch({ headless });
+  const context = await browserInstance.newContext();
+  const page = await context.newPage();
+
+  try {
+    await page.goto(baseUrl);
+    await page.waitForLoadState("networkidle");
+
+    const usernameSelectors = [
+      'input[name="os_username"]',
+      'input[name="username"]',
+      'input[type="email"]',
+      'input[type="text"]',
+      '#username',
+      '#login-form-username',
+      '#os_username',
+    ];
+
+    const passwordSelectors = [
+      'input[name="os_password"]',
+      'input[name="password"]',
+      'input[type="password"]',
+      '#password',
+      '#login-form-password',
+      '#os_password',
+    ];
+
+    const submitSelectors = [
+      'input[type="submit"]',
+      'button[type="submit"]',
+      '#login-form-submit',
+      '#login',
+      '#submit',
+      'button:has-text("Log In")',
+      'button:has-text("Sign In")',
+      'button:has-text("Next")',
+    ];
+
+    const deadline = Date.now() + 60_000; // 1 minute timeout for auto-login
+    let loggedIn = false;
+
+    while (Date.now() < deadline) {
+      const currentUrl = page.url();
+      const ssoPatterns = ["/login", "/sso", "/idp", "/auth", "/saml", "/oauth", "/openid-connect"];
+      const onSsoPage = ssoPatterns.some((p) => currentUrl.includes(p));
+
+      if (!onSsoPage) {
+        const currentCookies = await context.cookies();
+        if (currentCookies.length > 0) {
+          const storageState = await context.storageState();
+          const candidate: SessionFile = {
+            savedAt: new Date().toISOString(),
+            baseUrl,
+            storageState,
+          };
+          if (await validateCandidateSession(candidate, baseUrl, validatePath)) {
+            loggedIn = true;
+            break;
+          }
+        }
+      }
+
+      let usernameFilled = false;
+      for (const selector of usernameSelectors) {
+        const el = page.locator(selector).first();
+        if (await el.isVisible()) {
+          const val = await el.inputValue();
+          if (val !== email) {
+            await el.fill(email);
+          }
+          usernameFilled = true;
+          break;
+        }
+      }
+
+      let passwordFilled = false;
+      for (const selector of passwordSelectors) {
+        const el = page.locator(selector).first();
+        if (await el.isVisible()) {
+          const val = await el.inputValue();
+          if (val !== password) {
+            await el.fill(password);
+          }
+          passwordFilled = true;
+          break;
+        }
+      }
+
+      if (usernameFilled || passwordFilled) {
+        let submitted = false;
+        if (passwordFilled) {
+          for (const selector of passwordSelectors) {
+            const el = page.locator(selector).first();
+            if (await el.isVisible()) {
+              await el.press("Enter");
+              submitted = true;
+              break;
+            }
+          }
+        }
+
+        if (!submitted) {
+          for (const selector of submitSelectors) {
+            const el = page.locator(selector).first();
+            if (await el.isVisible()) {
+              await el.click();
+              submitted = true;
+              break;
+            }
+          }
+        }
+      }
+
+      await page.waitForTimeout(2_000);
+    }
+
+    if (!loggedIn) {
+      const storageState = await context.storageState();
+      const candidate: SessionFile = {
+        savedAt: new Date().toISOString(),
+        baseUrl,
+        storageState,
+      };
+      if (await validateCandidateSession(candidate, baseUrl, validatePath)) {
+        loggedIn = true;
+      }
+    }
+
+    if (!loggedIn) {
+      throw new Error(
+        "Automatic login failed: could not authenticate with provided credentials.\n" +
+        "Please check your JIRA_EMAIL and JIRA_PASSWORD."
+      );
+    }
+
+    const storageState = await context.storageState();
+    const candidate: SessionFile = {
+      savedAt: new Date().toISOString(),
+      baseUrl,
+      storageState,
+    };
+    await writeSession(sessionFilePath, candidate);
+    console.log(`\n✅ Session saved to ${sessionFilePath}`);
+  } finally {
+    await browserInstance.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Re-export readSession for test convenience
 // ---------------------------------------------------------------------------
 export { readSession };
