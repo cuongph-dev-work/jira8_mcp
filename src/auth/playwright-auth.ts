@@ -184,9 +184,9 @@ export async function runAutomaticLogin(options: {
     validatePath = "/rest/api/2/myself",
   } = options;
 
-  console.log(`\n🔐 Launching ${browserName} for automatic background login...\n`);
-  console.log(`   Base URL : ${baseUrl}`);
-  console.log(`   Session  : ${sessionFilePath}\n`);
+  console.error(`\n🔐 Launching ${browserName} for automatic background login...\n`);
+  console.error(`   Base URL : ${baseUrl}`);
+  console.error(`   Session  : ${sessionFilePath}\n`);
 
   const browserFactory = getBrowserFactory(browserName);
   const browserInstance = await browserFactory.launch({ headless });
@@ -331,7 +331,7 @@ export async function runAutomaticLogin(options: {
       storageState,
     };
     await writeSession(sessionFilePath, candidate);
-    console.log(`\n✅ Session saved to ${sessionFilePath}`);
+    console.error(`\n✅ Session saved to ${sessionFilePath}`);
   } finally {
     await browserInstance.close();
   }
