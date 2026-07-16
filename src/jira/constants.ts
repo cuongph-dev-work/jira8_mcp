@@ -760,6 +760,22 @@ export const PROJECT_STAGE = {
   PROJECT_PLAN: "10086",
 } as const;
 
+/** Jira REST `value` strings for `customfield_10339` (Project Stages) on create/update. */
+export const PROJECT_STAGE_VALUE: Record<keyof typeof PROJECT_STAGE, string> = {
+  SALE: "Sale",
+  REQUIREMENT: "Requirement",
+  BASIC_DESIGN: "Basic Design",
+  DETAIL_DESIGN: "Detail Design",
+  CODING: "Coding",
+  TEST_UT: "Test_UT",
+  TEST_IT: "Test_IT",
+  TEST_OTHER: "Test_Other",
+  DEPLOYMENT: "Deployment",
+  UAT: "UAT",
+  MAINTENANCE: "Maintenance",
+  PROJECT_PLAN: "Project Plan",
+} as const;
+
 /** `customfield_12100` — Difficulty Level */
 export const DIFFICULTY_LEVEL = {
   LEVEL_1: "12701",
@@ -1112,7 +1128,12 @@ export const REQUIRED_FIELDS: Record<IssueTypeId, readonly string[]> = {
   ],
   [ISSUE_TYPE.NC]: [FIELD.PROJECT, FIELD.ISSUE_TYPE, FIELD.SUMMARY],
   [ISSUE_TYPE.MA]: [FIELD.PROJECT, FIELD.ISSUE_TYPE, FIELD.SUMMARY],
-  [ISSUE_TYPE.REVIEW_DEFECT]: [FIELD.PROJECT, FIELD.ISSUE_TYPE, FIELD.SUMMARY],
+  [ISSUE_TYPE.REVIEW_DEFECT]: [
+    FIELD.PROJECT,
+    FIELD.ISSUE_TYPE,
+    FIELD.SUMMARY,
+    CUSTOM_FIELD.PROJECT_STAGES,
+  ],
 } as const;
 
 const COMMON_OPTIONAL_FIELDS = [

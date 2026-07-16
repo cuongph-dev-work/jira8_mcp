@@ -7,10 +7,7 @@ import {
   ISSUE_TYPE,
   type IssueTypeId,
 } from "../jira/constants.js";
-import {
-  buildCreateIssuePayload,
-  buildCreateIssueResult,
-} from "../jira/create-issue.js";
+import { createIssueFromFields } from "../jira/create-issue.js";
 import { normalizeJiraBody } from "../jira/body-normalizer.js";
 import { navigationHint } from "../utils.js";
 import type { Config } from "../config.js";
@@ -78,11 +75,12 @@ export async function handleCreateIssue(
 
   try {
     const client = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const payload = buildCreateIssuePayload(issueTypeId, normalizedFields);
-    const created = await client.createIssue(payload);
-    const rawSummary = normalizedFields[FIELD.SUMMARY];
-    const summary = typeof rawSummary === "string" ? rawSummary : "";
-    const result = buildCreateIssueResult(cfg.JIRA_BASE_URL, created, issueTypeId, summary);
+    const result = await createIssueFromFields(
+      client,
+      cfg.JIRA_BASE_URL,
+      issueTypeId,
+      normalizedFields
+    );
 
     return {
       content: [

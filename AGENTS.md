@@ -91,9 +91,17 @@ All tools that return information should conclude their Markdown output with con
 **Chaining pattern:**
 ```
 jira_search_tempo_teams → jira_get_timesheet_approvals → jira_get_timesheet_approval_log
-                                                        → jira_search_worklogs
-                                                        → jira_act_on_timesheet_approval
+ → jira_search_worklogs
+ → jira_act_on_timesheet_approval
 ```
+
+### GitLab Review Defects
+
+| Tool | Input | Purpose |
+|------|-------|---------|
+| `jira_sync_gitlab_review_defects` | `{ projectKey, mrState?, mrIid?, dryRun?, userOverrides? }` | Sync MR top-level review comments → Review Defect (`10805`). `mrState`: opened\|merged\|closed (default merged), or `mrIid` for one MR. Default `dryRun: true`. |
+
+**Docs:** `docs/tools/jira_sync_gitlab_review_defects.md` · Spec: `docs/superpowers/specs/2026-07-16-gitlab-review-defects-sync-design.md`
 
 
 ## Adding a New Tool

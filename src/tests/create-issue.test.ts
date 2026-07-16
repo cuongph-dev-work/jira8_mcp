@@ -5,6 +5,7 @@ import { JiraHttpClient } from "../jira/http-client.js";
 import { CUSTOM_FIELD, FIELD, ISSUE_TYPE } from "../jira/constants.js";
 import {
   buildCreateIssuePayload,
+  createIssueFromFields,
   validateCreateIssueFields,
 } from "../jira/create-issue.js";
 import { handleCreateIssue } from "../tools/create-issue.js";
@@ -161,6 +162,32 @@ describe("JiraHttpClient.createIssue", () => {
     await expect(
       client.createIssue({ fields: { project: { key: "DNIEM" }, summary: "Create tool" } })
     ).rejects.toMatchObject({ code: "SESSION_EXPIRED" });
+  });
+});
+
+describe("createIssueFromFields", () => {
+  const BASE_URL = "https://jira.example.com";
+
+  it("validates, creates, and returns JiraCreatedIssue", async () => {
+    const mockCreateIssue = vi.fn().mockResolvedValue({
+      id: "10001",
+      key: "DNIEM-42",
+      url: `${BASE_URL}/browse/DNIEM-42`,
+    });
+    const client = { createIssue: mockCreateIssue };
+
+    const result = await createIssueFromFields(client, BASE_URL, ISSUE_TYPE.TASK, {
+      [FIELD.PROJECT]: { key: "DNIEM" },
+      [FIELD.SUMMARY]: "Create MCP tool",
+      [CUSTOM_FIELD.DIFFICULTY_LEVEL]: { id: "10400" },
+      [CUSTOM_FIELD.PROJECT_STAGES]: [{ id: "10300" }],
+      [FIELD.DUE_DATE]: "2026-04-30",
+    });
+
+    expect(mockCreateIssue).toHaveBeenCalledOnce();
+    expect(result.key).toBe("DNIEM-42");
+    expect(result.summary).toBe("Create MCP tool");
+    expect(result.issueType).toBe("Task");
   });
 });
 

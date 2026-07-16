@@ -41,6 +41,7 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 - 📎 `jira_add_attachment` — upload workspace files as issue attachments
 - 📤 `jira_upload_attachment_content` — attach AI-generated content (text, CSV, JSON…) directly without a local file
 - 🗂️ `jira_get_projects` / `jira_get_components` / `jira_get_priorities` — discover common Jira metadata
+- 🔀 `jira_sync_gitlab_review_defects` — sync GitLab MR review comments into Jira Review Defects (`mrState` or single `mrIid`)
 - 🛡️ Clean `SESSION_EXPIRED` / `AUTH_REQUIRED` errors with reauthentication hints
 - 🖥️ Three CLI utilities for session management
 
@@ -198,7 +199,7 @@ Use the local `dist/server.js` instead of the npm package:
 ```json
 {
   "mcpServers": {
-    "jira": {
+    "jira-run-mcp": {
       "command": "node",
       "args": ["/absolute/path/to/jira-run-mcp/dist/server.js"]
     }
@@ -285,6 +286,23 @@ Create a Jira issue for a specific issue type.
 | `fields` | `object` | Jira create fields keyed by standard field names or `customfield_*` IDs; `fields.description` accepts `string` or raw ADF |
 
 **Output:** Confirmation with created issue key, summary, issue type, and browser URL.
+
+---
+
+### `jira_sync_gitlab_review_defects`
+
+Sync top-level GitLab MR review comments into Jira **Review Defect** issues. Requires `GITLAB_TOKEN` in `.env` and `.jira/gitlab-projects.json`.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `projectKey` | `string` | Jira project key mapped in `.jira/gitlab-projects.json` |
+| `mrState` | `string` | Optional: `opened`, `merged` (default), or `closed` |
+| `mrIid` | `number` | Optional: process one MR only (ignores `mrState`) |
+| `dryRun` | `boolean` | Default `true` — preview only; `false` to create issues |
+| `userOverrides` | `object` | GitLab username → Jira username/email when lookup fails |
+
+**Docs:** [`docs/tools/jira_sync_gitlab_review_defects.md`](docs/tools/jira_sync_gitlab_review_defects.md)
 
 ---
 

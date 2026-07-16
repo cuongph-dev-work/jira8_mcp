@@ -6,6 +6,9 @@ dist/
 
 # Jira session state — contains live browser cookies
 .jira/session.json
+.jira/gitlab-review-defects.json
+.jira/gitlab-projects.json
+
 
 # Editor
 .DS_Store
@@ -14,3 +17,4 @@ dist/
 .serena
 .gemini
 .agents
+.cursor

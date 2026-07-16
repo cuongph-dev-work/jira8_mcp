@@ -16,6 +16,9 @@ const schema = z.object({
   JIRA_EMAIL: z.string().optional(),
   JIRA_PASSWORD: z.string().optional(),
 
+  /** GitLab personal access token (required by jira_sync_gitlab_review_defects). */
+  GITLAB_TOKEN: z.string().min(1).optional(),
+
   LOG_LEVEL: z
     .enum(["debug", "info", "warn", "error"])
     .default("info"),
