@@ -6,6 +6,7 @@ import {
   REQUIRED_FIELDS,
   type IssueTypeId,
 } from "./constants.js";
+import type { JiraHttpClient } from "./http-client.js";
 
 export interface JiraCreateIssuePayload {
   fields: Record<string, unknown>;
@@ -64,6 +65,20 @@ export function buildCreateIssueResult(
     issueType: ISSUE_TYPE_LABEL[issueTypeId],
     summary,
   };
+}
+
+/** Validate, POST create, and return a stable JiraCreatedIssue result. */
+export async function createIssueFromFields(
+  client: Pick<JiraHttpClient, "createIssue">,
+  baseUrl: string,
+  issueTypeId: IssueTypeId,
+  fields: Record<string, unknown>
+): Promise<JiraCreatedIssue> {
+  const payload = buildCreateIssuePayload(issueTypeId, fields);
+  const created = await client.createIssue(payload);
+  const rawSummary = fields[FIELD.SUMMARY];
+  const summary = typeof rawSummary === "string" ? rawSummary : "";
+  return buildCreateIssueResult(baseUrl, created, issueTypeId, summary);
 }
 
 function normalizeCreateIssueFields(fields: Record<string, unknown>): Record<string, unknown> {

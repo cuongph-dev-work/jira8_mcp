@@ -25,6 +25,7 @@
   "files": [
     "dist/auth",
     "dist/cli",
+    "dist/gitlab",
     "dist/jira",
     "dist/tools",
     "dist/types",

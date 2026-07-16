@@ -848,7 +848,13 @@ export class JiraHttpClient {
 
   private assertOk(status: number, url: string, body: unknown): void {
     if (status < 200 || status >= 300) {
-      throw jiraHttpError(status, url, typeof body === "string" ? body : undefined);
+      const bodyText =
+        typeof body === "string"
+          ? body
+          : body != null
+            ? JSON.stringify(body)
+            : undefined;
+      throw jiraHttpError(status, url, bodyText);
     }
   }
 }

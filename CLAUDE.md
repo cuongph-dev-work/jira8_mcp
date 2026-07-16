@@ -112,6 +112,17 @@ Output: total count + list of { key, summary, status, assignee, priority, update
 
 **Use when:** User asks to find/list issues by criteria.
 
+### `jira_sync_gitlab_review_defects`
+
+Sync top-level GitLab MR review comments into Review Defect issues.
+
+```
+Input: { projectKey: "PROJ", mrState?: "opened"|"merged"|"closed", mrIid?: number, dryRun?: true, userOverrides?: { "gitlabUser": "jira.user" } }
+Requires: GITLAB_TOKEN + .jira/gitlab-projects.json
+```
+
+**Use when:** User wants to collect MR review comments into Jira. Pass `mrState` or a single `mrIid`. Always dry-run first.
+
 ### Tool Usage Rules
 
 1. **Single ticket → `jira_get_issue`.** Broad query → `jira_search_issues`.

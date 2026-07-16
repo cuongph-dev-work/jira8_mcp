@@ -2,14 +2,14 @@
 
 ## Goal
 
-Add MCP tool `jira_sync_gitlab_review_defects` that, for a Jira project key, reads configured GitLab repositories, collects top-level review comments from **open** merge requests, and creates Jira **Review Defect** issues (`ISSUE_TYPE.REVIEW_DEFECT` = `10805`).
+Add MCP tool `jira_sync_gitlab_review_defects` that, for a Jira project key, reads configured GitLab repositories, collects top-level review comments from merge requests, and creates Jira **Review Defect** issues (`ISSUE_TYPE.REVIEW_DEFECT` = `10805`).
 
 ## Requirements
 
 1. Trigger input is a Jira `projectKey`.
 2. GitLab links are configured in `.jira/gitlab-projects.json` (custom base URL; multiple repos per project).
 3. Authenticate to GitLab with `GITLAB_TOKEN` from the process environment.
-4. Only process merge requests with `state=opened`.
+4. Caller selects scope via `mrState` (`opened` | `merged` | `closed`, default `merged`) **or** a single `mrIid`.
 5. Only process **top-level** human discussion notes; ignore replies and system notes.
 6. Deduplicate with both Jira search (note id marker / external id) and a local store `.jira/gitlab-review-defects.json`.
 7. Default `dryRun: true`; create only when `dryRun: false`.
@@ -26,7 +26,7 @@ Orchestrator tool over a thin GitLab HTTP client, reusing existing Jira session,
 | Layer | Responsibility |
 |-------|----------------|
 | `src/tools/sync-gitlab-review-defects.ts` | Zod input, auth gate, orchestration, markdown result |
-| `src/gitlab/` | Token HTTP client, open MRs, discussions, note filtering |
+| `src/gitlab/` | Token HTTP client, list/get MRs by state or IID, discussions, note filtering |
 | `src/jira/gitlab-project-map.ts` | Load/validate project → GitLab links |
 | `src/jira/gitlab-review-dedup-store.ts` | Local processed-id store |
 | Existing `src/jira/` | Session, create issue, user search, JQL |
@@ -36,6 +36,8 @@ Orchestrator tool over a thin GitLab HTTP client, reusing existing Jira session,
 ```ts
 {
   projectKey: string;
+  mrState?: "opened" | "merged" | "closed"; // default "merged"; ignored when mrIid set
+  mrIid?: number; // optional: process one MR only
   dryRun?: boolean; // default true
   userOverrides?: Record<string, string>; // gitlabUsername → jira username or email
 }
@@ -72,7 +74,7 @@ Orchestrator tool over a thin GitLab HTTP client, reusing existing Jira session,
 ## Data flow
 
 1. Load GitLab links for `projectKey`; error if none.
-2. For each link: list open MRs.
+2. For each link: list MRs by `mrState`, or fetch a single `mrIid`.
 3. For each MR: fetch discussions; keep first note of each discussion when human (not system); ignore replies.
 4. Skip if dedup key exists in Jira JQL or local store.
 5. Resolve assignee (MR author) and reporter (comment author).
@@ -92,7 +94,6 @@ Orchestrator tool over a thin GitLab HTTP client, reusing existing Jira session,
 ## Out of scope
 
 - Webhooks / cron sync
-- Closed or merged MRs
 - Creating issues for reply notes
 - Auto-linking to a parent Jira story
 - Per-host GitLab tokens (single `GITLAB_TOKEN`)
