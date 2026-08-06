@@ -4,6 +4,7 @@ import { configError } from "../errors.js";
 import { fromRoot } from "../bootstrap.js";
 
 const gitlabLinkSchema = z.object({
+  name: z.string().trim().min(1),
   gitlabBaseUrl: z.string().url(),
   projectPath: z.string().min(1),
 });
@@ -48,6 +49,7 @@ export async function loadGitlabProjectLinks(
   }
 
   return links.map((link) => ({
+    name: link.name,
     gitlabBaseUrl: link.gitlabBaseUrl.replace(/\/$/, ""),
     projectPath: link.projectPath.replace(/^\/+|\/+$/g, ""),
   }));

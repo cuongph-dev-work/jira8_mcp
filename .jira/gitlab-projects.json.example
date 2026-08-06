@@ -1,10 +1,12 @@
 {
   "PROJ": [
     {
+      "name": "app-frontend",
       "gitlabBaseUrl": "https://gitlab.example.com",
       "projectPath": "group/app-frontend"
     },
     {
+      "name": "app-backend",
       "gitlabBaseUrl": "https://gitlab.example.com",
       "projectPath": "group/app-backend"
     }

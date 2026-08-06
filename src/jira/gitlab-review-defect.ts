@@ -42,7 +42,7 @@ export interface ReviewDefectResolvedCandidate {
 export const REVIEW_DEFECT_SUMMARY_PREFIX = "[Review Code]";
 
 export function buildReviewDefectSummary(candidate: GitlabReviewCommentCandidate): string {
-  const prefix = `${REVIEW_DEFECT_SUMMARY_PREFIX} [MR !${candidate.mrIid}] `;
+  const prefix = `${REVIEW_DEFECT_SUMMARY_PREFIX}[${candidate.name}][MR !${candidate.mrIid}] `;
   const maxBody = 180 - prefix.length;
   const body = candidate.body.replace(/\s+/g, " ").trim();
   const truncated = body.length > maxBody ? `${body.slice(0, maxBody - 1)}…` : body;

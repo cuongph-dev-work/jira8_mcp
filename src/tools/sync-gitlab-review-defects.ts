@@ -247,6 +247,7 @@ async function collectReviewComments(input: {
           );
           candidates.push(
             ...extractTopLevelReviewComments({
+              name: link.name,
               gitlabBaseUrl: link.gitlabBaseUrl,
               projectPath: link.projectPath,
               mr,

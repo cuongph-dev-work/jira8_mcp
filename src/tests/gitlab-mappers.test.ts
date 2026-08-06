@@ -86,6 +86,7 @@ describe("extractTopLevelReviewComments", () => {
     ];
 
     const result = extractTopLevelReviewComments({
+      name: "app",
       gitlabBaseUrl: "https://gitlab.example.com",
       projectPath: "group/app",
       mr,
@@ -94,6 +95,7 @@ describe("extractTopLevelReviewComments", () => {
 
     expect(result).toHaveLength(2);
     expect(result[0].noteId).toBe(10);
+    expect(result[0].name).toBe("app");
     expect(result[0].commentAuthorUsername).toBe("reviewer1");
     expect(result[0].mrAuthorUsername).toBe("thanhnn");
     expect(result[0].dueDate).toBe("2026-07-15");
@@ -121,6 +123,7 @@ describe("extractTopLevelReviewComments", () => {
 
     expect(
       extractTopLevelReviewComments({
+        name: "app",
         gitlabBaseUrl: "https://gitlab.example.com",
         projectPath: "group/app",
         mr,
