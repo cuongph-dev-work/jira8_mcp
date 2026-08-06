@@ -84,8 +84,9 @@ describe("gitlab project map + dedup store", () => {
       JSON.stringify({
         PROJ: [
           {
-            gitlabBaseUrl: "https://gitlab.example.com/",
-            projectPath: "/group/app/",
+             name: "  app  ",
+             gitlabBaseUrl: "https://gitlab.example.com/",
+             projectPath: "/group/app/",
           },
         ],
       }),
@@ -94,7 +95,26 @@ describe("gitlab project map + dedup store", () => {
 
     const links = await loadGitlabProjectLinks("PROJ", file);
     expect(links).toEqual([
-      { gitlabBaseUrl: "https://gitlab.example.com", projectPath: "group/app" },
+      { name: "app", gitlabBaseUrl: "https://gitlab.example.com", projectPath: "group/app" },
+    ]);
+  });
+
+  it("requires a non-empty repository name and trims it", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gitlab-map-validation-"));
+    const file = join(dir, "gitlab-projects.json");
+    const baseLink = {
+      gitlabBaseUrl: "https://gitlab.example.com",
+      projectPath: "group/app",
+    };
+
+    for (const name of [undefined, "", "   "]) {
+      await writeFile(file, JSON.stringify({ PROJ: [{ ...baseLink, name }] }), "utf8");
+      await expect(loadGitlabProjectLinks("PROJ", file)).rejects.toThrow("Invalid GitLab project map");
+    }
+
+    await writeFile(file, JSON.stringify({ PROJ: [{ ...baseLink, name: "  app  " }] }), "utf8");
+    await expect(loadGitlabProjectLinks("PROJ", file)).resolves.toEqual([
+      { name: "app", ...baseLink },
     ]);
   });
 
@@ -154,8 +174,9 @@ describe("handleSyncGitlabReviewDefects", () => {
       JSON.stringify({
         PROJ: [
           {
-            gitlabBaseUrl: "https://gitlab.example.com",
-            projectPath: "group/app",
+             name: "app",
+             gitlabBaseUrl: "https://gitlab.example.com",
+             projectPath: "group/app",
           },
         ],
       }),
@@ -226,6 +247,7 @@ describe("handleSyncGitlabReviewDefects", () => {
     expect(result.content[0].text).toContain("Please fix null check");
     expect(result.content[0].text).toContain("create payload");
     expect(result.content[0].text).toContain('"issuetype"');
+    expect(result.content[0].text).toContain('[Review Code][app][MR !42]');
     expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened");
     expect(mockCreateIssue).not.toHaveBeenCalled();
   });
@@ -316,6 +338,7 @@ describe("handleSyncGitlabReviewDefects", () => {
       fields: Record<string, unknown>;
     };
     expect(payload.fields.customfield_10339).toEqual({ value: "Coding" });
+    expect(payload.fields.summary).toBe("[Review Code][app][MR !42] Please fix null check");
     const ids = await loadGitlabReviewDedupStore(dedupFile);
     expect(ids.has("https://gitlab.example.com|group/app|42|10")).toBe(true);
   });

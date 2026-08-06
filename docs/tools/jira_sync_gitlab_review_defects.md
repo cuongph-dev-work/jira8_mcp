@@ -4,7 +4,7 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 
 ## When to Use
 
-1. Configure GitLab links for the Jira project in `.jira/gitlab-projects.json` (see `.jira/gitlab-projects.json.example`).
+1. Configure GitLab links for the Jira project in `.jira/gitlab-projects.json` (see `.jira/gitlab-projects.json.example`). Each entry requires a trimmed, non-empty `name` that identifies the repository when multiple repositories map to one Jira project.
 2. Export `GITLAB_TOKEN` with `read_api` (or `api`) scope.
 3. Choose scope: `mrState` for many MRs, or `mrIid` for one MR.
 4. Call with `dryRun: true` (default) to preview candidates.
@@ -32,6 +32,7 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 - Reporter = comment author (same email rule)
 - Due date = comment created date (`YYYY-MM-DD`)
 - Project Stages (`customfield_10339`) = `CODING` by default; override with `projectStage` (e.g. `BASIC_DESIGN`)
+- Summary format: `[Review Code][<repository name>][MR !<IID>] <comment review>`, truncated to 180 characters
 
 ## Output sections
 
@@ -48,6 +49,20 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 | No mapping for project | Edit `.jira/gitlab-projects.json` |
 | Session expired | `npm run jira-auth-login` |
 | GitLab 401/403 | Check token scopes |
+
+## Configuration example
+
+```json
+{
+  "PROJ": [
+    {
+      "name": "app-frontend",
+      "gitlabBaseUrl": "https://gitlab.example.com",
+      "projectPath": "group/app-frontend"
+    }
+  ]
+}
+```
 
 ## Examples
 

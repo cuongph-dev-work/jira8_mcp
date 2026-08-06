@@ -25,13 +25,25 @@ const sampleCandidate: GitlabReviewCommentCandidate = {
   line: 12,
   gitlabBaseUrl: "https://gitlab.example.com",
   projectPath: "group/app",
+  name: "app",
 };
 
 describe("buildReviewDefectSummary", () => {
-  it("prefixes Review Code and MR IID and truncates long bodies", () => {
-    expect(buildReviewDefectSummary(sampleCandidate)).toContain("[Review Code]");
-    expect(buildReviewDefectSummary(sampleCandidate)).toContain("[MR !42]");
-    expect(buildReviewDefectSummary(sampleCandidate).length).toBeLessThanOrEqual(180);
+  it("formats the repository-qualified summary", () => {
+    expect(buildReviewDefectSummary(sampleCandidate)).toBe(
+      "[Review Code][app][MR !42] Please fix null check in login"
+    );
+  });
+
+  it("truncates long bodies using the complete prefix", () => {
+    const summary = buildReviewDefectSummary({
+      ...sampleCandidate,
+      name: "a-very-long-repository-name",
+      body: "x".repeat(180),
+    });
+
+    expect(summary).toHaveLength(180);
+    expect(summary.endsWith("…")).toBe(true);
   });
 });
 

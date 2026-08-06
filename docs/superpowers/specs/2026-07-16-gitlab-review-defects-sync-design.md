@@ -59,12 +59,18 @@ Orchestrator tool over a thin GitLab HTTP client, reusing existing Jira session,
 {
   "PROJ": [
     {
+      "name": "app-frontend",
       "gitlabBaseUrl": "https://gitlab.example.com",
       "projectPath": "group/app-frontend"
     }
   ]
 }
 ```
+
+### Link requirements
+
+- `name` is required, trimmed, and must be non-empty; it identifies the repository in Jira summaries.
+- Summary format is `[Review Code][<name>][MR !<IID>] <comment review>` and is truncated to 180 characters using the complete prefix.
 
 ### Environment
 
@@ -74,7 +80,8 @@ Orchestrator tool over a thin GitLab HTTP client, reusing existing Jira session,
 ## Data flow
 
 1. Load GitLab links for `projectKey`; error if none.
-2. For each link: list MRs by `mrState`, or fetch a single `mrIid`.
+2. Preserve each configured repository `name` while collecting comments.
+3. For each link: list MRs by `mrState`, or fetch a single `mrIid`.
 3. For each MR: fetch discussions; keep first note of each discussion when human (not system); ignore replies.
 4. Skip if dedup key exists in Jira JQL or local store.
 5. Resolve assignee (MR author) and reporter (comment author).

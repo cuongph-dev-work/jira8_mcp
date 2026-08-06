@@ -20,6 +20,7 @@ export interface GitlabReviewCommentCandidate {
   line: number | null;
   gitlabBaseUrl: string;
   projectPath: string;
+  name: string;
 }
 
 export function buildDedupKey(
@@ -48,6 +49,7 @@ export function buildGitlabNoteUrl(
  * Ignores replies (notes after the first) and system notes.
  */
 export function extractTopLevelReviewComments(input: {
+  name: string;
   gitlabBaseUrl: string;
   projectPath: string;
   mr: GitlabRawMergeRequest;
@@ -98,6 +100,7 @@ export function extractTopLevelReviewComments(input: {
       line: typeof line === "number" ? line : null,
       gitlabBaseUrl: input.gitlabBaseUrl.replace(/\/$/, ""),
       projectPath: input.projectPath,
+      name: input.name,
     });
   }
 

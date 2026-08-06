@@ -291,7 +291,7 @@ Create a Jira issue for a specific issue type.
 
 ### `jira_sync_gitlab_review_defects`
 
-Sync top-level GitLab MR review comments into Jira **Review Defect** issues. Requires `GITLAB_TOKEN` in `.env` and `.jira/gitlab-projects.json`.
+Sync top-level GitLab MR review comments into Jira **Review Defect** issues. Requires `GITLAB_TOKEN` in `.env` and `.jira/gitlab-projects.json`. Each mapping entry must include a non-empty repository `name`; generated summaries use `[Review Code][<name>][MR !<IID>] ...` to identify the repository.
 
 **Input:**
 | Field | Type | Description |
