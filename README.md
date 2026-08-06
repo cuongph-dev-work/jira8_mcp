@@ -101,7 +101,9 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` in your project:
       "command": "npx",
       "args": ["-y", "@cuongph.dev/jira-mcp"],
       "env": {
-        "JIRA_BASE_URL": "https://jira.yourcompany.com"
+        "JIRA_BASE_URL": "https://jira.yourcompany.com",
+        "GITLAB_TOKEN": "glpat-xxxx",
+        "GITLAB_PROJECTS_JSON": "{\"PROJ\":[{\"name\":\"app-frontend\",\"gitlabBaseUrl\":\"https://gitlab.example.com\",\"projectPath\":\"group/app-frontend\"}]}"
       }
     }
   }
@@ -119,14 +121,19 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "npx",
       "args": ["-y", "@cuongph.dev/jira-mcp"],
       "env": {
-        "JIRA_BASE_URL": "https://jira.yourcompany.com"
+        "JIRA_BASE_URL": "https://jira.yourcompany.com",
+        "GITLAB_TOKEN": "glpat-xxxx",
+        "GITLAB_PROJECTS_JSON": "{\"PROJ\":[{\"name\":\"app-frontend\",\"gitlabBaseUrl\":\"https://gitlab.example.com\",\"projectPath\":\"group/app-frontend\"}]}"
       }
     }
   }
 }
 ```
 
-> **Tip:** You can omit the `env` block and place `JIRA_BASE_URL=https://jira.yourcompany.com` in a `.env` file at your working directory instead. `dotenv` is loaded automatically at startup.
+> **Tip:** You can omit the `env` block and set `JIRA_BASE_URL=https://jira.yourcompany.com` in:
+> - source checkout: `<repo>/.env`
+> - npm/npx install: `~/.jira/jira-mcp/.env`
+> For GitLab sync, put `GITLAB_TOKEN` and `GITLAB_PROJECTS_JSON` in the same `env` block (or `.env`). MCP clients do not pass custom top-level blocks like `"config": { ... }` to the server process.
 
 Restart your MCP client after saving the config.
 
@@ -291,12 +298,12 @@ Create a Jira issue for a specific issue type.
 
 ### `jira_sync_gitlab_review_defects`
 
-Sync top-level GitLab MR review comments into Jira **Review Defect** issues. Requires `GITLAB_TOKEN` in `.env` and `.jira/gitlab-projects.json`. Each mapping entry must include a non-empty repository `name`; generated summaries use `[Review Code][<name>][MR !<IID>] ...` to identify the repository.
+Sync top-level GitLab MR review comments into Jira **Review Defect** issues. Requires `GITLAB_TOKEN` and GitLab project links. Preferred MCP setup is `GITLAB_PROJECTS_JSON` in the MCP `env` block (stringified JSON). Fallback map file path is `.jira/gitlab-projects.json` in a source checkout, or `~/.jira/jira-mcp/gitlab-projects.json` when running `@cuongph.dev/jira-mcp` via npm/npx. Each mapping entry must include a non-empty repository `name`; generated summaries use `[Review Code][<name>][MR !<IID>] ...` to identify the repository.
 
 **Input:**
 | Field | Type | Description |
 |---|---|---|
-| `projectKey` | `string` | Jira project key mapped in `.jira/gitlab-projects.json` |
+| `projectKey` | `string` | Jira project key mapped in `GITLAB_PROJECTS_JSON` or the GitLab projects file |
 | `mrState` | `string` | Optional: `opened`, `merged` (default), or `closed` |
 | `mrIid` | `number` | Optional: process one MR only (ignores `mrState`) |
 | `dryRun` | `boolean` | Default `true` — preview only; `false` to create issues |

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
-import { fromRoot } from "../bootstrap.js";
+import { defaultSessionDir } from "../bootstrap.js";
 
 const storeSchema = z.object({
   processedIds: z.array(z.string()).default([]),
@@ -9,8 +9,9 @@ const storeSchema = z.object({
 
 export type GitlabReviewDedupStore = z.infer<typeof storeSchema>;
 
-export const DEFAULT_GITLAB_REVIEW_DEDUP_FILE = fromRoot(
-  ".jira/gitlab-review-defects.json"
+export const DEFAULT_GITLAB_REVIEW_DEDUP_FILE = join(
+  defaultSessionDir,
+  "gitlab-review-defects.json"
 );
 
 export async function loadGitlabReviewDedupStore(

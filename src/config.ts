@@ -3,6 +3,12 @@ import { join } from "path";
 import { z } from "zod";
 import { configError } from "./errors.js";
 
+const nonEmptyStringOptional = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}, z.string().min(1).optional());
+
 // ---------------------------------------------------------------------------
 // Schema — only user-facing variables are read from the environment.
 // Internal/infra settings are hardcoded below.
@@ -17,7 +23,10 @@ const schema = z.object({
   JIRA_PASSWORD: z.string().optional(),
 
   /** GitLab personal access token (required by jira_sync_gitlab_review_defects). */
-  GITLAB_TOKEN: z.string().min(1).optional(),
+  GITLAB_TOKEN: nonEmptyStringOptional,
+  GITLAB_PROJECTS_JSON: nonEmptyStringOptional,
+  GITLAB_PROJECTS_FILE: nonEmptyStringOptional,
+  GITLAB_DEDUP_FILE: nonEmptyStringOptional,
 
   LOG_LEVEL: z
     .enum(["debug", "info", "warn", "error"])
@@ -50,7 +59,14 @@ function loadConfig(): Config {
       .join("\n");
     throw configError(`Invalid configuration:\n${messages}`, result.error);
   }
-  return { ...DEFAULTS, ...result.data };
+  return {
+    ...DEFAULTS,
+    ...result.data,
+    GITLAB_PROJECTS_FILE:
+      result.data.GITLAB_PROJECTS_FILE ?? join(defaultSessionDir, "gitlab-projects.json"),
+    GITLAB_DEDUP_FILE:
+      result.data.GITLAB_DEDUP_FILE ?? join(defaultSessionDir, "gitlab-review-defects.json"),
+  };
 }
 
 export const config: Config = loadConfig();

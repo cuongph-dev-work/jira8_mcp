@@ -9,7 +9,10 @@ import {
   appendGitlabReviewDedupIds,
   loadGitlabReviewDedupStore,
 } from "../jira/gitlab-review-dedup-store.js";
-import { loadGitlabProjectLinks } from "../jira/gitlab-project-map.js";
+import {
+  loadGitlabProjectLinks,
+  loadGitlabProjectLinksFromJson,
+} from "../jira/gitlab-project-map.js";
 import {
   handleSyncGitlabReviewDefects,
   resolveQuery,
@@ -21,6 +24,9 @@ const mockConfig = {
   JIRA_SESSION_FILE: ".jira/session.json",
   JIRA_VALIDATE_PATH: "/rest/api/2/myself" as const,
   ATTACHMENT_WORKSPACE: "downloads",
+  GITLAB_PROJECTS_FILE: ".jira/gitlab-projects.json",
+  GITLAB_DEDUP_FILE: ".jira/gitlab-review-defects.json",
+  GITLAB_PROJECTS_JSON: undefined,
   LOG_LEVEL: "info" as const,
   PLAYWRIGHT_HEADLESS: false as const,
   PLAYWRIGHT_BROWSER: "chromium" as const,
@@ -116,6 +122,31 @@ describe("gitlab project map + dedup store", () => {
     await expect(loadGitlabProjectLinks("PROJ", file)).resolves.toEqual([
       { name: "app", ...baseLink },
     ]);
+  });
+
+  it("loads links from GITLAB_PROJECTS_JSON payload", async () => {
+    const links = await loadGitlabProjectLinksFromJson(
+      "PROJ",
+      JSON.stringify({
+        PROJ: [
+          {
+            name: " app ",
+            gitlabBaseUrl: "https://gitlab.example.com/",
+            projectPath: "/group/app/",
+          },
+        ],
+      })
+    );
+
+    expect(links).toEqual([
+      { name: "app", gitlabBaseUrl: "https://gitlab.example.com", projectPath: "group/app" },
+    ]);
+  });
+
+  it("fails on malformed GITLAB_PROJECTS_JSON payload", async () => {
+    await expect(loadGitlabProjectLinksFromJson("PROJ", "{")).rejects.toThrow(
+      "Invalid JSON in GITLAB_PROJECTS_JSON"
+    );
   });
 
   it("appends dedup ids", async () => {
@@ -252,6 +283,59 @@ describe("handleSyncGitlabReviewDefects", () => {
     expect(mockCreateIssue).not.toHaveBeenCalled();
   });
 
+  it("uses cfg GitLab file paths when options are omitted", async () => {
+    mockFindUsers.mockImplementation(async (query: string) => [
+      {
+        name: query,
+        key: query,
+        displayName: query,
+        emailAddress: query,
+        active: true,
+      },
+    ]);
+
+    const result = await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: true, mrState: "opened" },
+      { ...mockConfig, GITLAB_PROJECTS_FILE: mapFile, GITLAB_DEDUP_FILE: dedupFile }
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Candidates");
+    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened");
+  });
+
+  it("uses GITLAB_PROJECTS_JSON when provided in config", async () => {
+    mockFindUsers.mockImplementation(async (query: string) => [
+      {
+        name: query,
+        key: query,
+        displayName: query,
+        emailAddress: query,
+        active: true,
+      },
+    ]);
+
+    const result = await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: true, mrState: "opened" },
+      {
+        ...mockConfig,
+        GITLAB_PROJECTS_JSON: JSON.stringify({
+          PROJ: [
+            {
+              name: "json-repo",
+              gitlabBaseUrl: "https://gitlab.example.com",
+              projectPath: "group/app",
+            },
+          ],
+        }),
+      }
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("[Review Code][json-repo][MR !42]");
+    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened");
+  });
+
   it("processes a single MR when mrIid is set", async () => {
     mockListMrs.mockResolvedValue([]);
     mockGetMr.mockResolvedValue({
@@ -308,6 +392,100 @@ describe("handleSyncGitlabReviewDefects", () => {
     expect(result.content[0].text).toContain("Needs user mapping");
     expect(result.content[0].text).toContain("thanhnn@runsystem.net");
     expect(mockCreateIssue).not.toHaveBeenCalled();
+  });
+
+  it("skips an entire MR when Jira already has Review Defects for that MR", async () => {
+    mockFindUsers.mockImplementation(async (query: string) => [
+      {
+        name: query,
+        key: query,
+        displayName: query,
+        emailAddress: query,
+        active: true,
+      },
+    ]);
+    mockSearchIssues.mockImplementation(async (jql: string) => {
+      if (jql.includes("/group/app/-/merge_requests/42")) {
+        return {
+          total: 1,
+          issues: [
+            {
+              key: "PROJ-77",
+            },
+          ],
+        };
+      }
+      return { total: 0, issues: [] };
+    });
+
+    const dryRunResult = await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: true, mrState: "opened" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+    expect(dryRunResult.content[0].text).toContain("Candidates (0)");
+    expect(dryRunResult.content[0].text).toContain("Skipped MRs (already in Jira)");
+    expect(dryRunResult.content[0].text).toContain("MR !42");
+    expect(dryRunResult.content[0].text).toContain("PROJ-77");
+
+    const applyResult = await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: false, mrState: "opened" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+    expect(applyResult.content[0].text).toContain("Created (0)");
+    expect(mockCreateIssue).not.toHaveBeenCalled();
+  });
+
+  it("checks MR existence only once per MR even with multiple notes", async () => {
+    mockListDiscussions.mockResolvedValue([
+      {
+        id: "d1",
+        notes: [
+          {
+            id: 10,
+            body: "Top-level note one",
+            system: false,
+            created_at: "2026-07-15T10:00:00.000Z",
+            author: { username: "reviewer1" },
+          },
+        ],
+      },
+      {
+        id: "d2",
+        notes: [
+          {
+            id: 12,
+            body: "Top-level note two",
+            system: false,
+            created_at: "2026-07-15T12:00:00.000Z",
+            author: { username: "reviewer1" },
+          },
+        ],
+      },
+    ]);
+    mockFindUsers.mockImplementation(async (query: string) => [
+      {
+        name: query,
+        key: query,
+        displayName: query,
+        emailAddress: query,
+        active: true,
+      },
+    ]);
+    mockSearchIssues.mockResolvedValue({ total: 0, issues: [] });
+
+    await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: true, mrState: "opened" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+
+    const mrScopeCalls = mockSearchIssues.mock.calls.filter(([jql]) =>
+      (jql as string).includes("/group/app/-/merge_requests/42") &&
+      !(jql as string).includes("#note_")
+    );
+    expect(mrScopeCalls).toHaveLength(1);
   });
 
   it("apply creates Review Defect and updates local dedup", async () => {

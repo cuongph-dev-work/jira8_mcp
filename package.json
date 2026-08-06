@@ -41,6 +41,7 @@
     "dist/types.d.ts",
     "dist/utils.js",
     "dist/utils.d.ts",
+    ".jira/gitlab-projects.json.example",
     "README.md",
     "LICENSE"
   ],

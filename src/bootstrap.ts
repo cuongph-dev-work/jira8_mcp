@@ -21,10 +21,6 @@ export const fromRoot = (p: string): string => resolve(projectRoot, p);
 
 const isNpmInstall = projectRoot.includes("node_modules");
 
-if (!isNpmInstall) {
-  loadDotenv({ path: fromRoot(".env") });
-}
-
 export const defaultSessionDir = isNpmInstall
   ? join(homedir(), ".jira", "jira-mcp")
   : fromRoot(".jira");
@@ -32,3 +28,9 @@ export const defaultSessionDir = isNpmInstall
 export const defaultDownloadsDir = isNpmInstall
   ? join(homedir(), ".jira", "jira-mcp", "downloads")
   : fromRoot("downloads");
+
+if (isNpmInstall) {
+  loadDotenv({ path: join(defaultSessionDir, ".env") });
+} else {
+  loadDotenv({ path: fromRoot(".env") });
+}

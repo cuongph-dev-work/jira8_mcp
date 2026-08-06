@@ -1018,12 +1018,12 @@ ENCODING:
 
   server.tool(
     "jira_sync_gitlab_review_defects",
-    "Sync top-level review comments from GitLab MRs into Jira Review Defect issues. Choose mrState=opened|merged|closed to scan many MRs, or pass mrIid to process a single MR. Reads GitLab links from .jira/gitlab-projects.json. Requires GITLAB_TOKEN. Default dryRun=true (preview only). Set dryRun=false to create issues. If assignee/reporter lookup fails, returns needsUserMapping — re-call with userOverrides." +
+    "Sync top-level review comments from GitLab MRs into Jira Review Defect issues. Choose mrState=opened|merged|closed to scan many MRs, or pass mrIid to process a single MR. Reads GitLab links from GITLAB_PROJECTS_JSON (preferred in MCP env) or GITLAB_PROJECTS_FILE (default: .jira/gitlab-projects.json in source checkout, ~/.jira/jira-mcp/gitlab-projects.json in npm/npx). Requires GITLAB_TOKEN. Default dryRun=true (preview only). Set dryRun=false to create issues. If assignee/reporter lookup fails, returns needsUserMapping — re-call with userOverrides." +
       WRITE_CONFIRMATION,
     {
       projectKey: z
         .string()
-        .describe("Jira project key, e.g. PROJ. Must exist in .jira/gitlab-projects.json."),
+        .describe("Jira project key, e.g. PROJ. Must exist in GITLAB_PROJECTS_JSON or the configured GitLab projects file."),
       mrState: z
         .enum(["opened", "merged", "closed"])
         .optional()

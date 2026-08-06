@@ -4,8 +4,14 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 
 ## When to Use
 
-1. Configure GitLab links for the Jira project in `.jira/gitlab-projects.json` (see `.jira/gitlab-projects.json.example`). Each entry requires a trimmed, non-empty `name` that identifies the repository when multiple repositories map to one Jira project.
-2. Export `GITLAB_TOKEN` with `read_api` (or `api`) scope.
+1. Configure GitLab links for the Jira project:
+   - Preferred (MCP): set `GITLAB_PROJECTS_JSON` in MCP `env` as stringified JSON (same shape as `.jira/gitlab-projects.json`)
+   - Fallback: GitLab projects file (see `.jira/gitlab-projects.json.example`). Default path:
+   - source checkout: `.jira/gitlab-projects.json`
+   - npm/npx install: `~/.jira/jira-mcp/gitlab-projects.json`
+   You can override with `GITLAB_PROJECTS_FILE`.
+2. Export `GITLAB_TOKEN` with `read_api` (or `api`) scope (or set it in `.env` at `<repo>/.env` for source checkout, or `~/.jira/jira-mcp/.env` for npm/npx install).
+   Note: MCP clients pass environment variables via `env`; custom blocks like `"config": { ... }` are ignored by the server process.
 3. Choose scope: `mrState` for many MRs, or `mrIid` for one MR.
 4. Call with `dryRun: true` (default) to preview candidates.
 5. If `needsUserMapping` appears, ask the user for Jira usernames/emails and re-call with `userOverrides`.
@@ -15,7 +21,7 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `projectKey` | `string` | ✅ | Jira project key (must have entries in `.jira/gitlab-projects.json`) |
+| `projectKey` | `string` | ✅ | Jira project key (must have entries in `GITLAB_PROJECTS_JSON` or the configured GitLab projects file) |
 | `mrState` | `"opened" \| "merged" \| "closed"` | ❌ | Default `merged`. Which MRs to scan when `mrIid` is omitted |
 | `mrIid` | `number` | ❌ | Process only this one MR IID (searched across configured GitLab links). When set, `mrState` is ignored |
 | `dryRun` | `boolean` | ❌ | Default `true`. Preview only when true; create when `false` |
@@ -26,8 +32,12 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 
 - Scope by `mrState` **or** a single `mrIid`
 - Only **top-level** human discussion notes (ignores replies and system notes)
+- MR-level safety check: if Jira already has any Review Defect mentioning `/{projectPath}/-/merge_requests/{mrIid}`, the tool skips **all** notes from that MR
 - Apply uses the same create-issue validation path as `jira_create_issue` / `jira_preview_create_issue` (`buildCreateIssuePayload` + `createIssueFromFields`)
-- Dedup via Jira text search for `gitlab-note-id: <MR note URL>` (e.g. `…/merge_requests/93#note_1625816`) **and** `.jira/gitlab-review-defects.json`. Legacy issues with pipe-delimited dedup keys are still matched.
+- Dedup via Jira text search for `gitlab-note-id: <MR note URL>` (e.g. `…/merge_requests/93#note_1625816`) **and** a local dedup store. Default path:
+  - source checkout: `.jira/gitlab-review-defects.json`
+  - npm/npx install: `~/.jira/jira-mcp/gitlab-review-defects.json`
+  Override with `GITLAB_DEDUP_FILE`.
 - Assignee = MR author (`{username}@runsystem.net` → Jira lookup)
 - Reporter = comment author (same email rule)
 - Due date = comment created date (`YYYY-MM-DD`)
@@ -37,6 +47,7 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 ## Output sections
 
 - Candidates / Created
+- Skipped MRs (already in Jira)
 - Skipped duplicates
 - Needs user mapping
 - Failed
@@ -45,8 +56,8 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 
 | Case | Resolution |
 |------|------------|
-| Missing `GITLAB_TOKEN` | `export GITLAB_TOKEN=…` |
-| No mapping for project | Edit `.jira/gitlab-projects.json` |
+| Missing `GITLAB_TOKEN` | `export GITLAB_TOKEN=…` (or set it in the matching `.env`) |
+| No mapping for project | Update `GITLAB_PROJECTS_JSON`, or edit your GitLab projects file (`GITLAB_PROJECTS_FILE` or default path) |
 | Session expired | `npm run jira-auth-login` |
 | GitLab 401/403 | Check token scopes |
 
