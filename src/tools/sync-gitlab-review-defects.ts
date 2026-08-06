@@ -6,6 +6,7 @@ import {
   type GitlabMrState,
 } from "../gitlab/http-client.js";
 import {
+  buildGitlabMrPathFragment,
   buildGitlabNoteUrl,
   extractTopLevelReviewComments,
   type GitlabReviewCommentCandidate,
@@ -24,6 +25,7 @@ import {
 } from "../jira/gitlab-review-defect.js";
 import {
   loadGitlabProjectLinks,
+  loadGitlabProjectLinksFromJson,
   type GitlabProjectLink,
 } from "../jira/gitlab-project-map.js";
 import {
@@ -78,6 +80,14 @@ interface ResolvedCandidate {
   reporterName: string;
 }
 
+interface SkippedMrCandidate {
+  mrIid: number;
+  projectPath: string;
+  noteCount: number;
+  sampleKey?: string;
+  sampleUrl?: string;
+}
+
 export async function handleSyncGitlabReviewDefects(
   rawInput: unknown,
   cfg: Config,
@@ -93,6 +103,9 @@ export async function handleSyncGitlabReviewDefects(
   }
 
   const { projectKey, mrState, mrIid, dryRun, userOverrides, projectStage } = parsed.data;
+  const gitlabProjectsJson = cfg.GITLAB_PROJECTS_JSON?.trim();
+  const gitlabProjectsFile = options?.gitlabProjectsFile ?? cfg.GITLAB_PROJECTS_FILE;
+  const gitlabDedupFile = options?.gitlabDedupFile ?? cfg.GITLAB_DEDUP_FILE;
   const token = cfg.GITLAB_TOKEN?.trim();
   if (!token) {
     return errorContent(
@@ -113,9 +126,11 @@ export async function handleSyncGitlabReviewDefects(
   }
 
   try {
-    const links = await loadGitlabProjectLinks(projectKey, options?.gitlabProjectsFile);
+    const links = gitlabProjectsJson
+      ? await loadGitlabProjectLinksFromJson(projectKey, gitlabProjectsJson)
+      : await loadGitlabProjectLinks(projectKey, gitlabProjectsFile);
     const jira = new JiraHttpClient(cfg.JIRA_BASE_URL, sessionCookies);
-    const localDedup = await loadGitlabReviewDedupStore(options?.gitlabDedupFile);
+    const localDedup = await loadGitlabReviewDedupStore(gitlabDedupFile);
     const userCache = new Map<string, JiraUserSearchResult | null>();
 
     const candidates: GitlabReviewCommentCandidate[] = [];
@@ -132,8 +147,40 @@ export async function handleSyncGitlabReviewDefects(
 
     const skippedDuplicate: GitlabReviewCommentCandidate[] = [];
     const pending: GitlabReviewCommentCandidate[] = [];
+    const skippedMrs: SkippedMrCandidate[] = [];
+    const mrDupCache = new Map<string, { exists: boolean; sampleKey?: string; sampleUrl?: string }>();
 
     for (const candidate of candidates) {
+      const mrKey = `${candidate.projectPath}|${candidate.mrIid}`;
+      const cached = mrDupCache.get(mrKey);
+      if (cached == null) {
+        mrDupCache.set(
+          mrKey,
+          await isMrAlreadyInJira(jira, projectKey, candidate.projectPath, candidate.mrIid)
+        );
+      }
+    }
+
+    const skippedMrMap = new Map<string, SkippedMrCandidate>();
+
+    for (const candidate of candidates) {
+      const mrKey = `${candidate.projectPath}|${candidate.mrIid}`;
+      const mrDup = mrDupCache.get(mrKey);
+      if (mrDup?.exists) {
+        const existing = skippedMrMap.get(mrKey);
+        if (existing != null) {
+          existing.noteCount += 1;
+        } else {
+          skippedMrMap.set(mrKey, {
+            mrIid: candidate.mrIid,
+            projectPath: candidate.projectPath,
+            noteCount: 1,
+            sampleKey: mrDup.sampleKey,
+            sampleUrl: mrDup.sampleUrl,
+          });
+        }
+        continue;
+      }
       const isLocalDup = localDedup.has(candidate.dedupKey);
       const isJiraDup = await isAlreadyInJira(jira, projectKey, candidate);
       if (isLocalDup || isJiraDup) {
@@ -142,6 +189,7 @@ export async function handleSyncGitlabReviewDefects(
         pending.push(candidate);
       }
     }
+    skippedMrs.push(...skippedMrMap.values());
 
     const needsUserMapping: NeedsUserMapping[] = [];
     const resolved: ResolvedCandidate[] = [];
@@ -196,7 +244,7 @@ export async function handleSyncGitlabReviewDefects(
           createFailed.push(formatErr(`create ${item.candidate.dedupKey}`, err));
         }
       }
-      await appendGitlabReviewDedupIds(newlyCreatedIds, options?.gitlabDedupFile);
+      await appendGitlabReviewDedupIds(newlyCreatedIds, gitlabDedupFile);
     }
 
     const text = formatResult({
@@ -207,6 +255,7 @@ export async function handleSyncGitlabReviewDefects(
       projectStage,
       resolved,
       created,
+      skippedMrs,
       skippedDuplicate,
       needsUserMapping,
       failed: createFailed,
@@ -351,6 +400,29 @@ async function isAlreadyInJira(
   return false;
 }
 
+async function isMrAlreadyInJira(
+  jira: Pick<JiraHttpClient, "searchIssues">,
+  projectKey: string,
+  projectPath: string,
+  mrIid: number
+): Promise<{ exists: boolean; sampleKey?: string; sampleUrl?: string }> {
+  const fragment = buildGitlabMrPathFragment(projectPath, mrIid);
+  const jql = `project = ${projectKey} AND issuetype = ${ISSUE_TYPE.REVIEW_DEFECT} AND text ~ "${escapeJqlString(fragment)}"`;
+  try {
+    const result = await jira.searchIssues(jql, 1);
+    if (result.total < 1) return { exists: false };
+    const first = result.issues[0];
+    if (first == null) return { exists: true };
+    return {
+      exists: true,
+      sampleKey: first.key,
+      sampleUrl: first.url,
+    };
+  } catch {
+    return { exists: false };
+  }
+}
+
 function formatResult(input: {
   projectKey: string;
   mrState: GitlabMrState;
@@ -359,6 +431,7 @@ function formatResult(input: {
   projectStage: ReviewDefectProjectStageKey;
   resolved: ResolvedCandidate[];
   created: Array<{ key: string; url: string; dedupKey: string }>;
+  skippedMrs: SkippedMrCandidate[];
   skippedDuplicate: GitlabReviewCommentCandidate[];
   needsUserMapping: NeedsUserMapping[];
   failed: string[];
@@ -398,6 +471,24 @@ function formatResult(input: {
       }
       lines.push("");
     }
+  }
+
+  lines.push(`## Skipped MRs (already in Jira) (${input.skippedMrs.length})`, "");
+  if (input.skippedMrs.length === 0) {
+    lines.push("_None._", "");
+  } else {
+    for (const skipped of input.skippedMrs) {
+      const issueRef =
+        skipped.sampleKey != null
+          ? skipped.sampleUrl != null
+            ? ` | existing: **${skipped.sampleKey}** (${skipped.sampleUrl})`
+            : ` | existing: **${skipped.sampleKey}**`
+          : "";
+      lines.push(
+        `- MR !${skipped.mrIid} (\`${skipped.projectPath}\`) — ${skipped.noteCount} note(s) skipped${issueRef}`
+      );
+    }
+    lines.push("");
   }
 
   lines.push(`## Skipped duplicates (${input.skippedDuplicate.length})`, "");

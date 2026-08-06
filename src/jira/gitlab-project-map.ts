@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
 import { configError } from "../errors.js";
-import { fromRoot } from "../bootstrap.js";
+import { defaultSessionDir } from "../bootstrap.js";
 
 const gitlabLinkSchema = z.object({
   name: z.string().trim().min(1),
@@ -14,7 +15,7 @@ const projectMapSchema = z.record(z.array(gitlabLinkSchema));
 export type GitlabProjectLink = z.infer<typeof gitlabLinkSchema>;
 export type GitlabProjectMap = z.infer<typeof projectMapSchema>;
 
-export const DEFAULT_GITLAB_PROJECTS_FILE = fromRoot(".jira/gitlab-projects.json");
+export const DEFAULT_GITLAB_PROJECTS_FILE = join(defaultSessionDir, "gitlab-projects.json");
 
 export async function loadGitlabProjectLinks(
   projectKey: string,
@@ -25,7 +26,7 @@ export async function loadGitlabProjectLinks(
     rawText = await readFile(filePath, "utf8");
   } catch {
     throw configError(
-      `GitLab project map not found at ${filePath}. Copy .jira/gitlab-projects.json.example and configure links for ${projectKey}.`
+      `GitLab project map not found at ${filePath}. Provide GITLAB_PROJECTS_JSON in MCP env, or copy .jira/gitlab-projects.json.example to this path (or set GITLAB_PROJECTS_FILE) and configure links for ${projectKey}.`
     );
   }
 
@@ -36,15 +37,37 @@ export async function loadGitlabProjectLinks(
     throw configError(`Invalid JSON in ${filePath}`, err);
   }
 
+  return parseAndExtractLinks(projectKey, parsedJson, filePath);
+}
+
+export async function loadGitlabProjectLinksFromJson(
+  projectKey: string,
+  rawJson: string
+): Promise<GitlabProjectLink[]> {
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(rawJson);
+  } catch (err: unknown) {
+    throw configError("Invalid JSON in GITLAB_PROJECTS_JSON", err);
+  }
+
+  return parseAndExtractLinks(projectKey, parsedJson, "GITLAB_PROJECTS_JSON");
+}
+
+function parseAndExtractLinks(
+  projectKey: string,
+  parsedJson: unknown,
+  sourceLabel: string
+): GitlabProjectLink[] {
   const parsed = projectMapSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw configError(`Invalid GitLab project map in ${filePath}`, parsed.error);
+    throw configError(`Invalid GitLab project map in ${sourceLabel}`, parsed.error);
   }
 
   const links = parsed.data[projectKey];
   if (!links || links.length === 0) {
     throw configError(
-      `No GitLab links configured for project "${projectKey}" in ${filePath}.`
+      `No GitLab links configured for project "${projectKey}" in ${sourceLabel}.`
     );
   }
 

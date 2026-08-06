@@ -44,6 +44,10 @@ export function buildGitlabNoteUrl(
   return `${base}/${projectPath}/-/merge_requests/${mrIid}#note_${noteId}`;
 }
 
+export function buildGitlabMrPathFragment(projectPath: string, mrIid: number): string {
+  return `/${projectPath}/-/merge_requests/${mrIid}`;
+}
+
 /**
  * Extract top-level human discussion notes from an MR.
  * Ignores replies (notes after the first) and system notes.
