@@ -67,13 +67,19 @@ npx -y playwright install chromium
 
 ### Step 2 — Authenticate with Jira
 
-You must provide your Jira URL when logging in. Replace the URL with your actual Jira instance:
+Replace the URL with your actual Jira instance. Choose one method:
+
+**Option A — Interactive SSO (recommended for MFA / multi-step IdP)**
 
 ```bash
 JIRA_BASE_URL=https://jira.yourcompany.com npx -y -p @cuongph.dev/jira-mcp jira-auth-login
 ```
 
-A browser window will open. Complete your SSO login manually. The session is saved locally to `.jira/session.json` (or `~/.jira/jira-mcp/session.json` for global npx usage).
+A browser window opens. Complete SSO manually. The session is saved to `.jira/session.json` (or `~/.jira/jira-mcp/session.json` for global npx usage).
+
+**Option B — Auto-login with credentials (form-based IdP only)**
+
+Set `JIRA_EMAIL` and `JIRA_PASSWORD` in your MCP client `env` block or in `.env` (see `.env.example`). When a tool runs and the session is missing or expired, the server attempts a headless Playwright login automatically. MFA or complex SSO still requires Option A.
 
 Verify the session is active:
 
@@ -131,10 +137,13 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-> **Tip:** You can omit the `env` block and set `JIRA_BASE_URL=https://jira.yourcompany.com` in:
+> **Tip:** You can omit the `env` block and load settings from:
 > - source checkout: `<repo>/.env`
 > - npm/npx install: `~/.jira/jira-mcp/.env`
-> For GitLab sync, put `GITLAB_TOKEN` and `GITLAB_PROJECTS_JSON` in the same `env` block (or `.env`). MCP clients do not pass custom top-level blocks like `"config": { ... }` to the server process.
+>
+> Supported variables include `JIRA_BASE_URL` (required), optional `JIRA_EMAIL` / `JIRA_PASSWORD` for auto-login, `LOG_LEVEL`, and GitLab sync vars (`GITLAB_TOKEN`, `GITLAB_PROJECTS_JSON`, etc.). See `.env.example`.
+>
+> For GitLab sync, put `GITLAB_TOKEN` and `GITLAB_PROJECTS_JSON` in the MCP `env` block or `.env`. MCP clients do not pass custom top-level blocks like `"config": { ... }` to the server process.
 
 Restart your MCP client after saving the config.
 
@@ -182,11 +191,15 @@ See `.env.example` for all available options.
 
 ### 4. Authenticate
 
+**Interactive SSO:**
+
 ```bash
 npm run jira-auth-login
 ```
 
 A browser window will open. Complete the SSO login manually. Session is saved to `.jira/session.json`.
+
+**Optional auto-login:** add `JIRA_EMAIL` and `JIRA_PASSWORD` to `.env` (see `.env.example`). On the next MCP tool call, `session-manager` will attempt headless login if the session is missing or expired.
 
 ```bash
 npm run jira-auth-check
@@ -200,20 +213,30 @@ npm run build
 
 ### 6. Add to MCP client (local build)
 
-Use the local `dist/server.js` instead of the npm package:
+Use the local `dist/server.js` instead of the npm package.
 
-**Cursor** (`~/.cursor/mcp.json`):
+| File | Purpose |
+|------|---------|
+| `.cursor/mcp.json` | Cursor IDE — project-local MCP servers (this repo includes an example) |
+| `.agents/mcp.json` | Cursor Agents / subagents — same shape; keep in sync with `.cursor/mcp.json` when both are used |
+
+**Cursor** (`.cursor/mcp.json` in the repo, or `~/.cursor/mcp.json` globally):
 
 ```json
 {
   "mcpServers": {
     "jira-run-mcp": {
       "command": "node",
-      "args": ["/absolute/path/to/jira-run-mcp/dist/server.js"]
+      "args": ["/absolute/path/to/jira-run-mcp/dist/server.js"],
+      "env": {
+        "LOG_LEVEL": "info"
+      }
     }
   }
 }
 ```
+
+Add `JIRA_BASE_URL` and optional `JIRA_EMAIL` / `JIRA_PASSWORD` to the `env` block if you do not rely on `.env` alone.
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 
@@ -228,7 +251,7 @@ Use the local `dist/server.js` instead of the npm package:
 }
 ```
 
-> The `.env` file in the project root is loaded automatically — no need to duplicate env vars in the MCP config.
+> The `.env` file in the project root is loaded automatically — you only need `env` in MCP config for overrides (e.g. `LOG_LEVEL`) or secrets you prefer not to store in `.env`.
 
 ### CLI Utilities (dev)
 

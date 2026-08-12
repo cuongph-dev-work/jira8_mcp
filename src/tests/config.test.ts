@@ -64,6 +64,18 @@ describe("config", () => {
     });
   });
 
+
+  it("accepts optional JIRA_EMAIL and JIRA_PASSWORD", async () => {
+    process.env.JIRA_BASE_URL = "https://jira.example.com";
+    process.env.JIRA_EMAIL = "user@example.com";
+    process.env.JIRA_PASSWORD = "secret";
+
+    const { config } = await import("../config.js");
+
+    expect(config.JIRA_EMAIL).toBe("user@example.com");
+    expect(config.JIRA_PASSWORD).toBe("secret");
+  });
+
   it("treats empty GitLab env strings as unset", async () => {
     process.env.JIRA_BASE_URL = "https://jira.example.com";
     process.env.GITLAB_PROJECTS_JSON = "   ";
