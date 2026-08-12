@@ -38,6 +38,7 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 - 📋 `jira_get_transitions` — list currently available transitions for an issue
 - 📅 `jira_get_my_worklogs` — list the authenticated user's Tempo worklogs
 - 📅 `jira_update_worklog` / `jira_delete_worklog` — correct or remove Tempo worklogs
+- 📊 `jira_export_project_timesheet` — export a project's full Tempo timesheet (all members) to xlsx/xls/csv
 - 📎 `jira_add_attachment` — upload workspace files as issue attachments
 - 📤 `jira_upload_attachment_content` — attach AI-generated content (text, CSV, JSON…) directly without a local file
 - 🗂️ `jira_get_projects` / `jira_get_components` / `jira_get_priorities` — discover common Jira metadata
@@ -676,6 +677,24 @@ Delete a Tempo worklog by id.
 
 ---
 
+### `jira_export_project_timesheet`
+
+Export a project's full Tempo timesheet — worklogs from **all** members, not a hand-picked worker list — using Tempo's own export flow. The file is written to the `ATTACHMENT_WORKSPACE` downloads folder.
+
+**Input:**
+| Field | Type | Description |
+|---|---|---|
+| `projectKey` | `string` | Jira project key, e.g. `PROJ` |
+| `dateFrom` | `string` | Start date in `yyyy-MM-dd` format |
+| `dateTo` | `string` | End date inclusive in `yyyy-MM-dd` format |
+| `format` | `"xlsx" \| "xls" \| "csv"` | Optional, default `xlsx` (sent to Tempo as `ooxml`) |
+
+**Output:** Project key, period, resolved format, absolute file path, and file size.
+
+**Docs:** [`docs/tools/jira_export_project_timesheet.md`](docs/tools/jira_export_project_timesheet.md)
+
+---
+
 ### `jira_add_attachment`
 
 Upload a local file from the allowed workspace directory to an issue.
@@ -786,6 +805,7 @@ src/
 │   ├── assign-issue.ts    # jira_assign_issue handler
 │   ├── delete-comment.ts  # jira_delete_comment handler
 │   ├── delete-worklog.ts  # jira_delete_worklog handler
+│   ├── export-project-timesheet.ts # jira_export_project_timesheet handler
 │   ├── search-issues.ts   # jira_search_issues handler
 │   ├── smart-search.ts    # jira_smart_search handler
 │   ├── add-worklog.ts     # jira_add_worklog handler
