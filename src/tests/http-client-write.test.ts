@@ -475,4 +475,120 @@ describe("JiraHttpClient write helpers", () => {
       { id: "3", name: "Medium", description: "Medium priority", iconUrl: "icon.png" },
     ]);
   });
+
+  it("exports a project timesheet via the two-step Tempo filter+export flow", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 200,
+      data: { filterKey: "8cbcd13f059a4ad99085b1f9353b70fc" },
+    });
+    vi.mocked(mockedInstance.get).mockResolvedValue({
+      status: 200,
+      data: new TextEncoder().encode("binary-xlsx-bytes").buffer,
+      headers: {
+        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-disposition": 'attachment; filename="Project timesheet.xlsx"',
+      },
+    });
+
+    const result = await client.exportProjectTimesheet({
+      dateFrom: "2026-04-20",
+      dateTo: "2026-04-26",
+      projectKey: "ME",
+      title: "Project: Microcopy E-learning System (ME)",
+      format: "xlsx",
+    });
+
+    expect(mockedInstance.post).toHaveBeenCalledWith(
+      `${BASE_URL}/rest/tempo-timesheets/4/worklogs/export/filter`,
+      { from: "2026-04-20", to: "2026-04-26", projectKey: ["ME"] }
+    );
+    expect(mockedInstance.get).toHaveBeenCalledWith(
+      `${BASE_URL}/rest/tempo-timesheets/4/worklogs/export/8cbcd13f059a4ad99085b1f9353b70fc` +
+        `?format=ooxml&title=Project%253A%2520Microcopy%2520E-learning%2520System%2520(ME)`,
+      { responseType: "arraybuffer", headers: { Accept: "*/*" } }
+    );
+    expect(result.buffer.toString()).toBe("binary-xlsx-bytes");
+    expect(result.contentType).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    expect(result.contentDisposition).toBe('attachment; filename="Project timesheet.xlsx"');
+  });
+
+  it("accepts legacy filterId when filterKey is absent", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 200,
+      data: { filterId: "legacy-filter-id-abc" },
+    });
+    vi.mocked(mockedInstance.get).mockResolvedValue({
+      status: 200,
+      data: new TextEncoder().encode("bytes").buffer,
+      headers: { "content-type": "text/csv" },
+    });
+
+    await client.exportProjectTimesheet({
+      dateFrom: "2026-04-20",
+      dateTo: "2026-04-26",
+      projectKey: "ME",
+      title: "Project: ME",
+      format: "csv",
+    });
+
+    expect(mockedInstance.get).toHaveBeenCalledWith(
+      expect.stringContaining("/worklogs/export/legacy-filter-id-abc?"),
+      expect.any(Object)
+    );
+  });
+
+  it("falls back to a raw string filterId when the filter response has no known field", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 200,
+      data: "8cbcd13f059a4ad99085b1f9353b70fc",
+    });
+    vi.mocked(mockedInstance.get).mockResolvedValue({
+      status: 200,
+      data: new TextEncoder().encode("csv,bytes").buffer,
+      headers: { "content-type": "text/csv" },
+    });
+
+    const result = await client.exportProjectTimesheet({
+      dateFrom: "2026-04-20",
+      dateTo: "2026-04-26",
+      projectKey: "ME",
+      title: "Project: ME",
+      format: "csv",
+    });
+
+    expect(mockedInstance.get).toHaveBeenCalledWith(
+      `${BASE_URL}/rest/tempo-timesheets/4/worklogs/export/8cbcd13f059a4ad99085b1f9353b70fc` +
+        `?format=csv&title=Project%253A%2520ME`,
+      { responseType: "arraybuffer", headers: { Accept: "*/*" } }
+    );
+    expect(result.contentType).toBe("text/csv");
+  });
+
+  it("throws JIRA_RESPONSE_ERROR when the filter response has no recognizable filter id", async () => {
+    const client = new JiraHttpClient(BASE_URL, cookies);
+    const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;
+    vi.mocked(mockedInstance.post).mockResolvedValue({
+      status: 200,
+      data: { unexpected: "shape" },
+    });
+
+    await expect(
+      client.exportProjectTimesheet({
+        dateFrom: "2026-04-20",
+        dateTo: "2026-04-26",
+        projectKey: "ME",
+        title: "Project: ME",
+        format: "xlsx",
+      })
+    ).rejects.toMatchObject({ code: "JIRA_RESPONSE_ERROR" });
+    expect(mockedInstance.get).not.toHaveBeenCalled();
+  });
 });

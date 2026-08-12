@@ -23,6 +23,8 @@ import {
   tempoTimesheetApprovalUrl,
   tempoTimesheetApprovalLogUrl,
   tempoTeamSearchUrl,
+  tempoWorklogsExportFilterUrl,
+  tempoWorklogsExportUrl,
   userSearchUrl,
   ISSUE_FIELDS,
   SEARCH_FIELDS,
@@ -57,8 +59,15 @@ import type {
   TempoTimesheetApproval,
   TempoTeam,
   TempoApprovalLogEntry,
+  TempoExportedTimesheetFile,
 } from "../types.js";
-import type { TempoRawTimesheetApprovalResponse, TempoRawWorklog, TempoRawTeam, TempoRawApprovalLogResponse } from "../types/jira-api.js";
+import type {
+  TempoRawTimesheetApprovalResponse,
+  TempoRawWorklog,
+  TempoRawTeam,
+  TempoRawApprovalLogResponse,
+  TempoRawExportFilterResponse,
+} from "../types/jira-api.js";
 
 // ---------------------------------------------------------------------------
 // Client
@@ -612,6 +621,64 @@ export class JiraHttpClient {
     this.assertOk(res.status, url, res.data);
   }
 
+  /**
+   * Exports a project's full Tempo timesheet (all members) for a date range,
+   * using Tempo's own two-step Server/DC export flow:
+   *   1. POST .../worklogs/export/filter → registers a filter, returns a filter id.
+   *   2. GET .../worklogs/export/{filterId}?format=&title= → streams the file.
+   * The `title` is double URL-encoded to match the behavior captured from
+   * the Tempo Timesheets UI's own "Export" button.
+   * User-facing `xlsx` is sent to Tempo as `ooxml` (Office Open XML).
+   */
+  async exportProjectTimesheet(input: {
+    dateFrom: string;
+    dateTo: string;
+    projectKey: string;
+    title: string;
+    format: string;
+  }): Promise<TempoExportedTimesheetFile> {
+    const filterUrl = tempoWorklogsExportFilterUrl(this.baseUrl);
+    const filterRes = await this.http.post(filterUrl, {
+      from: input.dateFrom,
+      to: input.dateTo,
+      projectKey: [input.projectKey],
+    });
+
+    this.checkForAuthFailure(filterRes.status, filterUrl, filterRes.data);
+    this.assertOk(filterRes.status, filterUrl, filterRes.data);
+
+    const filterId = extractFilterId(filterRes.data);
+    if (!filterId) {
+      throw jiraResponseError(
+        "Unexpected Tempo export filter response shape — no filterKey/filterId/id/uuid field found",
+        filterRes.data
+      );
+    }
+
+    const tempoFormat = toTempoExportFormat(input.format);
+    const exportUrl =
+      `${tempoWorklogsExportUrl(this.baseUrl, filterId)}` +
+      `?format=${encodeURIComponent(tempoFormat)}` +
+      `&title=${encodeURIComponent(encodeURIComponent(input.title))}`;
+
+    const exportRes = await this.http.get(exportUrl, {
+      responseType: "arraybuffer",
+      headers: { Accept: "*/*" },
+    });
+
+    this.checkForAuthFailure(exportRes.status, exportUrl, "");
+    this.assertOk(exportRes.status, exportUrl, "");
+
+    const contentType = exportRes.headers["content-type"];
+    const contentDisposition = exportRes.headers["content-disposition"];
+
+    return {
+      buffer: Buffer.from(exportRes.data as ArrayBuffer),
+      contentType: typeof contentType === "string" ? contentType : undefined,
+      contentDisposition: typeof contentDisposition === "string" ? contentDisposition : undefined,
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Attachment download
   // ---------------------------------------------------------------------------
@@ -865,6 +932,34 @@ function isLoginPage(body: string): boolean {
     lower.startsWith("<!") &&
     (lower.includes("log in") || lower.includes("login") || lower.includes("sso"))
   );
+}
+
+/**
+ * Maps user-facing export format names to Tempo's query `format` values.
+ * Tempo Server/DC uses `ooxml` for `.xlsx` (not `xlsx`).
+ */
+function toTempoExportFormat(format: string): string {
+  if (format === "xlsx") return "ooxml";
+  return format;
+}
+
+/**
+ * Extracts a filter id from Tempo's POST /worklogs/export/filter response.
+ * Live Tempo Server returns `{ filterKey }`; also accepts filterId/id/uuid
+ * and a raw string body as fallbacks.
+ */
+function extractFilterId(raw: unknown): string | null {
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    return raw.trim();
+  }
+  if (raw && typeof raw === "object") {
+    const obj = raw as TempoRawExportFilterResponse;
+    if (typeof obj.filterKey === "string" && obj.filterKey.length > 0) return obj.filterKey;
+    if (typeof obj.filterId === "string" && obj.filterId.length > 0) return obj.filterId;
+    if (typeof obj.id === "string" && obj.id.length > 0) return obj.id;
+    if (typeof obj.uuid === "string" && obj.uuid.length > 0) return obj.uuid;
+  }
+  return null;
 }
 
 function normalizeAttachmentUploadResponse(raw: unknown): JiraAttachmentUploadResult[] {

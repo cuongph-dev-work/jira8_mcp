@@ -12,6 +12,7 @@ This document describes the end-to-end flow for reviewing and approving team tim
 | `jira_get_timesheet_approvals` | `GET /rest/tempo-timesheets/4/timesheet-approval` | Current approval status of all team members |
 | `jira_get_timesheet_approval_log` | `GET /rest/tempo-timesheets/4/timesheet-approval/log` | Audit trail: who submitted/approved/rejected and when |
 | `jira_search_worklogs` | `POST /rest/tempo-timesheets/4/worklogs/search` | Actual worklog entries for specific people |
+| `jira_export_project_timesheet` | `POST /worklogs/export/filter` + `GET /worklogs/export/{id}` | Export a whole project's timesheet (all members) to xlsx/xls/csv |
 | `jira_act_on_timesheet_approval` | `POST /rest/tempo-timesheets/4/timesheet-approval` | Approve, reject, or reopen a member's timesheet |
 
 ---
@@ -129,6 +130,15 @@ Expected flow:
 
 Expected flow:
 1. `jira_search_worklogs({ dateFrom: "2026-04-20", dateTo: "2026-04-26", workers: ["ducnpp@runsystem.net", "quocpa@runsystem.net", "lapdq@runsystem.net"] })`
+
+---
+
+### Use Case 9 — Export Full Project Timesheet
+
+> **"Xuất timesheet cả tháng 4 của dự án ME ra file Excel."**
+
+Expected flow:
+1. `jira_export_project_timesheet({ projectKey: "ME", dateFrom: "2026-04-01", dateTo: "2026-04-30" })` → saves an `.xlsx` file locally covering every project member and returns the file path.
 
 ---
 

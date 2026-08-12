@@ -415,6 +415,16 @@ export interface TempoWorklogListItem {
   typeOfWork: string | null;
 }
 
+/**
+ * Binary export file returned by `exportProjectTimesheet`, plus the HTTP
+ * response headers needed to resolve a filename/extension.
+ */
+export interface TempoExportedTimesheetFile {
+  buffer: Buffer;
+  contentType?: string;
+  contentDisposition?: string;
+}
+
 export interface TempoTimesheetApproval {
   username: string;
   displayName: string;
