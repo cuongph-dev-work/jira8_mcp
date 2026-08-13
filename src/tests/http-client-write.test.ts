@@ -49,6 +49,21 @@ describe("JiraHttpClient write helpers", () => {
     ]);
   });
 
+  it("adds Basic Authorization and omits an empty Cookie header", () => {
+    const authorizationHeader = `Basic ${Buffer.from("user@example.com:secret").toString("base64")}`;
+    new JiraHttpClient(BASE_URL, { cookieHeader: "", authorizationHeader });
+
+    expect(axios.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: authorizationHeader,
+        },
+      })
+    );
+  });
+
   it("finds users with normalized identity fields", async () => {
     const client = new JiraHttpClient(BASE_URL, cookies);
     const mockedInstance = vi.mocked(axios.create).mock.results[0]?.value;

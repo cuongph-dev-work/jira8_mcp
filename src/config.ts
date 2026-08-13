@@ -19,8 +19,8 @@ const schema = z.object({
     .string()
     .url("JIRA_BASE_URL must be a valid URL (e.g. https://jira.yourcompany.com)"),
 
-  JIRA_EMAIL: z.string().optional(),
-  JIRA_PASSWORD: z.string().optional(),
+  JIRA_EMAIL: nonEmptyStringOptional,
+  JIRA_PASSWORD: nonEmptyStringOptional,
 
   /** GitLab personal access token (required by jira_sync_gitlab_review_defects). */
   GITLAB_TOKEN: nonEmptyStringOptional,
@@ -31,6 +31,16 @@ const schema = z.object({
   LOG_LEVEL: z
     .enum(["debug", "info", "warn", "error"])
     .default("info"),
+}).superRefine((values, ctx) => {
+  const hasEmail = values.JIRA_EMAIL !== undefined;
+  const hasPassword = values.JIRA_PASSWORD !== undefined;
+  if (hasEmail !== hasPassword) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [hasEmail ? "JIRA_PASSWORD" : "JIRA_EMAIL"],
+      message: "JIRA_EMAIL and JIRA_PASSWORD must be configured together",
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------

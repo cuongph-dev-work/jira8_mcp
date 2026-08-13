@@ -76,6 +76,16 @@ describe("config", () => {
     expect(config.JIRA_PASSWORD).toBe("secret");
   });
 
+  it("rejects partial Jira credentials", async () => {
+    process.env.JIRA_BASE_URL = "https://jira.example.com";
+    process.env.JIRA_EMAIL = "user@example.com";
+    delete process.env.JIRA_PASSWORD;
+
+    await expect(import("../config.js")).rejects.toMatchObject({
+      code: "CONFIG_ERROR",
+    });
+  });
+
   it("treats empty GitLab env strings as unset", async () => {
     process.env.JIRA_BASE_URL = "https://jira.example.com";
     process.env.GITLAB_PROJECTS_JSON = "   ";

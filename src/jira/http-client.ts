@@ -79,13 +79,20 @@ export class JiraHttpClient {
 
   constructor(baseUrl: string, cookies: SessionCookies) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    if (cookies.cookieHeader) {
+      headers.Cookie = cookies.cookieHeader;
+    }
+    if (cookies.authorizationHeader) {
+      headers.Authorization = cookies.authorizationHeader;
+    }
+
     this.http = axios.create({
       baseURL: this.baseUrl,
-      headers: {
-        Cookie: cookies.cookieHeader,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers,
       // Block redirects — a redirect usually means the session expired and
       // Jira is sending us back to the SSO login page.
       maxRedirects: 0,
