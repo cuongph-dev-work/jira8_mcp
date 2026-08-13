@@ -38,6 +38,8 @@ export interface SessionFile {
 export interface SessionCookies {
   /** Value suitable for the Cookie request header */
   cookieHeader: string;
+  /** Value suitable for the Authorization request header */
+  authorizationHeader?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -467,4 +469,3 @@ export interface TempoApprovalLogEntry {
 
 /** Approval log per user keyed by userKey */
 export type TempoApprovalLog = Map<string, TempoApprovalLogEntry[]>;
-

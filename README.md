@@ -77,9 +77,9 @@ JIRA_BASE_URL=https://jira.yourcompany.com npx -y -p @cuongph.dev/jira-mcp jira-
 
 A browser window opens. Complete SSO manually. The session is saved to `.jira/session.json` (or `~/.jira/jira-mcp/session.json` for global npx usage).
 
-**Option B — Auto-login with credentials (form-based IdP only)**
+**Option B — Basic Auth with credentials**
 
-Set `JIRA_EMAIL` and `JIRA_PASSWORD` in your MCP client `env` block or in `.env` (see `.env.example`). When a tool runs and the session is missing or expired, the server attempts a headless Playwright login automatically. MFA or complex SSO still requires Option A.
+Set both `JIRA_EMAIL` and `JIRA_PASSWORD` in your MCP client `env` block or in `.env` (see `.env.example`). The server validates HTTP Basic Auth first and uses it for Jira REST calls without opening a browser. If Jira rejects Basic Auth, it falls back to a headless Playwright login and then the stored session cookie. MFA or complex SSO still requires Option A.
 
 Verify the session is active:
 
@@ -199,7 +199,7 @@ npm run jira-auth-login
 
 A browser window will open. Complete the SSO login manually. Session is saved to `.jira/session.json`.
 
-**Optional auto-login:** add `JIRA_EMAIL` and `JIRA_PASSWORD` to `.env` (see `.env.example`). On the next MCP tool call, `session-manager` will attempt headless login if the session is missing or expired.
+**Optional Basic Auth:** add both `JIRA_EMAIL` and `JIRA_PASSWORD` to `.env` (see `.env.example`). On the next MCP tool call, Basic Auth is validated first; Playwright auto-login is attempted only when Basic Auth is rejected.
 
 ```bash
 npm run jira-auth-check

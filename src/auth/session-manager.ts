@@ -1,11 +1,16 @@
 import axios from "axios";
-import { config } from "../config.js";
 import { readSession } from "./session-store.js";
 import { authRequired, sessionExpired } from "../errors.js";
 import type { PlaywrightCookie, SessionCookies, SessionFile } from "../types.js";
 
 const AUTO_LOGIN_HINT =
   "Check JIRA_EMAIL and JIRA_PASSWORD in .env (or MCP env), or run `jira-auth-login` for interactive SSO.";
+
+/** Builds an HTTP Basic Authorization value without persisting credentials. */
+export function createBasicAuthorizationHeader(username: string, password: string): string {
+  const auth = Buffer.from(`${username}:${password}`).toString("base64");
+  return `Basic ${auth}`;
+}
 
 // ---------------------------------------------------------------------------
 // Cookie extraction
@@ -50,11 +55,25 @@ export async function loadAndValidateSession(
   baseUrl: string,
   validatePath: string
 ): Promise<SessionCookies> {
+  const email = process.env.JIRA_EMAIL?.trim() || undefined;
+  const password = process.env.JIRA_PASSWORD || undefined;
+  const credentialsConfigured = Boolean(email && password);
+
+  if (credentialsConfigured) {
+    const authorizationHeader = createBasicAuthorizationHeader(
+      email!,
+      password!
+    );
+    if (await validateAuthorization(baseUrl, validatePath, authorizationHeader)) {
+      return { cookieHeader: "", authorizationHeader };
+    }
+  }
+
   let session = await readSession(sessionFilePath);
   let isValid = false;
   let cookies: SessionCookies | null = null;
 
-  if (session !== null) {
+  if (session !== null && !credentialsConfigured) {
     cookies = extractCookies(session, baseUrl);
     const validateUrl = `${baseUrl}${validatePath}`;
 
@@ -80,19 +99,19 @@ export async function loadAndValidateSession(
     return cookies;
   }
 
-  const credentialsConfigured = Boolean(config.JIRA_EMAIL && config.JIRA_PASSWORD);
   let autoLoginAttempted = false;
 
   if (credentialsConfigured) {
     autoLoginAttempted = true;
     try {
       process.stderr.write("[jira-run-mcp] Session invalid or missing. Attempting automatic login...\n");
+      const { config } = await import("../config.js");
       const { runAutomaticLogin } = await import("./playwright-auth.js");
       await runAutomaticLogin({
         baseUrl,
         sessionFilePath,
-        email: config.JIRA_EMAIL!,
-        password: config.JIRA_PASSWORD!,
+        email: email!,
+        password: password!,
         headless: true,
         browser: config.PLAYWRIGHT_BROWSER,
         validatePath,
@@ -101,7 +120,9 @@ export async function loadAndValidateSession(
       session = await readSession(sessionFilePath);
       if (session !== null) {
         cookies = extractCookies(session, baseUrl);
-        return cookies;
+        if (await validateCookies(baseUrl, validatePath, cookies)) {
+          return cookies;
+        }
       }
     } catch (loginErr: unknown) {
       process.stderr.write(`[jira-run-mcp] Auto-login failed: ${String(loginErr)}\n`);
@@ -116,11 +137,61 @@ export async function loadAndValidateSession(
         : undefined
     );
   }
+
+  // With credentials configured, this is the last fallback after Basic Auth
+  // and automatic browser login have both failed.
+  if (!cookies) {
+    cookies = extractCookies(session, baseUrl);
+  }
+  if (cookies && (await validateCookies(baseUrl, validatePath, cookies))) {
+    return cookies;
+  }
+
   throw sessionExpired(
     autoLoginAttempted
       ? `Jira session has expired. Automatic login failed. ${AUTO_LOGIN_HINT}`
       : undefined
   );
+}
+
+async function validateAuthorization(
+  baseUrl: string,
+  validatePath: string,
+  authorizationHeader: string
+): Promise<boolean> {
+  try {
+    const res = await axios.get(`${baseUrl}${validatePath}`, {
+      headers: {
+        Authorization: authorizationHeader,
+        Accept: "application/json",
+      },
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 200 && status < 300,
+    });
+    return res.status >= 200 && res.status < 300 && !isLoginPageResponse(res.data);
+  } catch {
+    return false;
+  }
+}
+
+async function validateCookies(
+  baseUrl: string,
+  validatePath: string,
+  cookies: SessionCookies
+): Promise<boolean> {
+  try {
+    const res = await axios.get(`${baseUrl}${validatePath}`, {
+      headers: {
+        ...(cookies.cookieHeader ? { Cookie: cookies.cookieHeader } : {}),
+        Accept: "application/json",
+      },
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 200 && status < 300,
+    });
+    return res.status >= 200 && res.status < 300 && !isLoginPageResponse(res.data);
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
