@@ -105,6 +105,7 @@ export async function loadAndValidateSession(
     autoLoginAttempted = true;
     try {
       process.stderr.write("[jira-run-mcp] Session invalid or missing. Attempting automatic login...\n");
+      const { config } = await import("../config.js");
       const { runAutomaticLogin } = await import("./playwright-auth.js");
       await runAutomaticLogin({
         baseUrl,
@@ -112,7 +113,7 @@ export async function loadAndValidateSession(
         email: email!,
         password: password!,
         headless: true,
-        browser: "chromium",
+        browser: config.PLAYWRIGHT_BROWSER,
         validatePath,
       });
 
