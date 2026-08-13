@@ -1,7 +1,11 @@
 import axios from "axios";
+import { config } from "../config.js";
 import { readSession } from "./session-store.js";
 import { authRequired, sessionExpired } from "../errors.js";
 import type { PlaywrightCookie, SessionCookies, SessionFile } from "../types.js";
+
+const AUTO_LOGIN_HINT =
+  "Check JIRA_EMAIL and JIRA_PASSWORD in .env (or MCP env), or run `jira-auth-login` for interactive SSO.";
 
 // ---------------------------------------------------------------------------
 // Cookie extraction
@@ -76,22 +80,24 @@ export async function loadAndValidateSession(
     return cookies;
   }
 
-  // Session missing or invalid. Check if JIRA_EMAIL and JIRA_PASSWORD are configured
-  if (process.env.JIRA_EMAIL && process.env.JIRA_PASSWORD) {
+  const credentialsConfigured = Boolean(config.JIRA_EMAIL && config.JIRA_PASSWORD);
+  let autoLoginAttempted = false;
+
+  if (credentialsConfigured) {
+    autoLoginAttempted = true;
     try {
       process.stderr.write("[jira-run-mcp] Session invalid or missing. Attempting automatic login...\n");
       const { runAutomaticLogin } = await import("./playwright-auth.js");
       await runAutomaticLogin({
         baseUrl,
         sessionFilePath,
-        email: process.env.JIRA_EMAIL,
-        password: process.env.JIRA_PASSWORD,
-        headless: true, // Auto-login in background is headless
-        browser: (process.env.PLAYWRIGHT_BROWSER as "chromium" | "firefox" | "webkit") || "chromium",
+        email: config.JIRA_EMAIL!,
+        password: config.JIRA_PASSWORD!,
+        headless: true,
+        browser: config.PLAYWRIGHT_BROWSER,
         validatePath,
       });
 
-      // Reload session and validate
       session = await readSession(sessionFilePath);
       if (session !== null) {
         cookies = extractCookies(session, baseUrl);
@@ -99,13 +105,22 @@ export async function loadAndValidateSession(
       }
     } catch (loginErr: unknown) {
       process.stderr.write(`[jira-run-mcp] Auto-login failed: ${String(loginErr)}\n`);
+      process.stderr.write(`[jira-run-mcp] ${AUTO_LOGIN_HINT}\n`);
     }
   }
 
   if (session === null) {
-    throw authRequired();
+    throw authRequired(
+      autoLoginAttempted
+        ? `No Jira session found. Automatic login failed. ${AUTO_LOGIN_HINT}`
+        : undefined
+    );
   }
-  throw sessionExpired();
+  throw sessionExpired(
+    autoLoginAttempted
+      ? `Jira session has expired. Automatic login failed. ${AUTO_LOGIN_HINT}`
+      : undefined
+  );
 }
 
 // ---------------------------------------------------------------------------

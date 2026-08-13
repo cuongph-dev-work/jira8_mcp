@@ -171,3 +171,15 @@ export interface TempoRawApprovalLogEntry {
  */
 export type TempoRawApprovalLogResponse = Record<string, TempoRawApprovalLogEntry[]>;
 
+/**
+ * Response shape from POST /worklogs/export/filter.
+ * Live Tempo Server returns `{ filterKey }`; older/alternate shapes may use
+ * filterId/id/uuid/raw-string (see `extractFilterId` in http-client.ts).
+ */
+export interface TempoRawExportFilterResponse {
+  filterKey?: string;
+  filterId?: string;
+  id?: string;
+  uuid?: string;
+}
+

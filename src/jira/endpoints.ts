@@ -87,6 +87,22 @@ export function tempoTimesheetApprovalLogUrl(baseUrl: string, teamId: number, pe
   return `${baseUrl}${TEMPO_API_BASE}/timesheet-approval/log?teamId=${encodeURIComponent(teamId)}&periodStartDate=${encodeURIComponent(periodStartDate)}`;
 }
 
+/**
+ * URL for step 1 of the Tempo timesheet export flow — registers a search
+ * filter and returns a filter id used by `tempoWorklogsExportUrl`.
+ */
+export function tempoWorklogsExportFilterUrl(baseUrl: string): string {
+  return `${baseUrl}${TEMPO_API_BASE}/worklogs/export/filter`;
+}
+
+/**
+ * URL for step 2 of the Tempo timesheet export flow — streams back the
+ * binary export file for a previously-registered filter id.
+ */
+export function tempoWorklogsExportUrl(baseUrl: string, filterId: string): string {
+  return `${baseUrl}${TEMPO_API_BASE}/worklogs/export/${encodeURIComponent(filterId)}`;
+}
+
 export function tempoTeamSearchUrl(baseUrl: string): string {
   return `${baseUrl}/rest/tempo-teams/3/search`;
 }

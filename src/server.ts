@@ -48,6 +48,7 @@ import { handleGetTimesheetApprovals } from "./tools/get-timesheet-approvals.js"
 import { handleSearchTempoTeams } from "./tools/search-tempo-teams.js";
 import { handleGetTimesheetApprovalLog } from "./tools/get-timesheet-approval-log.js";
 import { handleSearchWorklogs } from "./tools/search-worklogs.js";
+import { handleExportProjectTimesheet } from "./tools/export-project-timesheet.js";
 import { handleActOnTimesheetApproval } from "./tools/act-on-timesheet-approval.js";
 import { handleSyncGitlabReviewDefects, reviewDefectProjectStageEnum } from "./tools/sync-gitlab-review-defects.js";
 import { DEFAULT_REVIEW_DEFECT_PROJECT_STAGE } from "./jira/gitlab-review-defect.js";
@@ -664,6 +665,23 @@ Returns: confirmation with Tempo worklog ID, issue details, and logged duration.
     },
     async (input) => {
       return handleSearchWorklogs(input, config);
+    }
+  );
+
+  server.tool(
+    "jira_export_project_timesheet",
+    "Export a Jira project's full Tempo timesheet (worklogs from all members) for a date range into a native Tempo export file (xlsx/xls/csv), saved to the local downloads folder. Returns the absolute file path.",
+    {
+      projectKey: z.string().describe("Jira project key, e.g. PROJ"),
+      dateFrom: z.string().describe("Start of date range in yyyy-MM-dd format (e.g., 2026-04-01)"),
+      dateTo: z.string().describe("End of date range inclusive in yyyy-MM-dd format (e.g., 2026-04-30)"),
+      format: z
+        .enum(["xlsx", "xls", "csv"])
+        .optional()
+        .describe("Requested export format (default xlsx). xlsx maps to Tempo ooxml"),
+    },
+    async (input) => {
+      return handleExportProjectTimesheet(input, config);
     }
   );
 
