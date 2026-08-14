@@ -79,7 +79,7 @@ A browser window opens. Complete SSO manually. The session is saved to `.jira/se
 
 **Option B — Basic Auth with credentials**
 
-Set both `JIRA_EMAIL` and `JIRA_PASSWORD` in your MCP client `env` block or in `.env` (see `.env.example`). The server validates HTTP Basic Auth first and uses it for Jira REST calls without opening a browser. If Jira rejects Basic Auth, it falls back to a headless Playwright login and then the stored session cookie. MFA or complex SSO still requires Option A.
+Set both `JIRA_EMAIL` and `JIRA_PASSWORD` in your MCP client `env` block or in `.env` (see `.env.example`). The server tries the stored cookie session first, then HTTP Basic Auth. It does **not** open a browser from MCP tool calls. If both fail, run Option A (`jira-auth-login`). MFA or complex SSO requires Option A.
 
 Verify the session is active:
 
@@ -141,7 +141,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 > - source checkout: `<repo>/.env`
 > - npm/npx install: `~/.jira/jira-mcp/.env`
 >
-> Supported variables include `JIRA_BASE_URL` (required), optional `JIRA_EMAIL` / `JIRA_PASSWORD` for auto-login, `LOG_LEVEL`, and GitLab sync vars (`GITLAB_TOKEN`, `GITLAB_PROJECTS_JSON`, etc.). See `.env.example`.
+> Supported variables include `JIRA_BASE_URL` (required), optional `JIRA_EMAIL` / `JIRA_PASSWORD` for HTTP Basic Auth, `LOG_LEVEL`, and GitLab sync vars (`GITLAB_TOKEN`, `GITLAB_PROJECTS_JSON`, etc.). See `.env.example`.
 >
 > For GitLab sync, put `GITLAB_TOKEN` and `GITLAB_PROJECTS_JSON` in the MCP `env` block or `.env`. MCP clients do not pass custom top-level blocks like `"config": { ... }` to the server process.
 
@@ -199,7 +199,7 @@ npm run jira-auth-login
 
 A browser window will open. Complete the SSO login manually. Session is saved to `.jira/session.json`.
 
-**Optional Basic Auth:** add both `JIRA_EMAIL` and `JIRA_PASSWORD` to `.env` (see `.env.example`). On the next MCP tool call, Basic Auth is validated first; Playwright auto-login is attempted only when Basic Auth is rejected.
+**Optional Basic Auth:** add both `JIRA_EMAIL` and `JIRA_PASSWORD` to `.env` (see `.env.example`). On the next MCP tool call the stored cookie is tried first; Basic Auth is used only if the cookie is missing or rejected. MCP never launches Playwright — use `jira-auth-login` for SSO.
 
 ```bash
 npm run jira-auth-check

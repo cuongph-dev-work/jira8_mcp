@@ -13,9 +13,9 @@
 
 1. **Server uses factory pattern.** Each incoming MCP request gets a new `McpServer` + `StreamableHTTPServerTransport` pair. Never reuse a server instance across requests.
 
-2. **Auth is isolated from tools.** Tools call `loadAndValidateSession()` — they never touch Playwright or browser state directly.
+2. **Auth is isolated from tools.** Tools call `loadAndValidateSession()` — they never touch Playwright or browser state. Session validation must not launch a browser.
 
-3. **HTTP-first for Jira access.** All Jira REST API calls go through `src/jira/http-client.ts` using Axios. Playwright is only used for the initial SSO login CLI command.
+3. **HTTP-first for Jira access.** All Jira REST API calls go through `src/jira/http-client.ts` using Axios. Playwright is used only for the interactive SSO login CLI (`jira-auth-login`). `loadAndValidateSession()` never launches a browser: it tries the stored cookie session, then optional HTTP Basic Auth, then returns `AUTH_REQUIRED` / `SESSION_EXPIRED`.
 
 4. **Zod validates everything.** Environment variables (`src/config.ts`), tool inputs (each tool's schema), and Jira responses are all validated.
 
@@ -128,33 +128,34 @@ jira_search_tempo_teams → jira_get_timesheet_approvals → jira_get_timesheet_
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **jira-run-mcp** (1630 symbols, 2895 relationships, 137 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **jira8_mcp** (1577 symbols, 3858 relationships, 129 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
 ## Always Do
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
 
 ## Never Do
 
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER edit a function, class, or method without first running `impact` on it.
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
+- NEVER commit changes without running `detect_changes()` to check affected scope.
 
 ## Resources
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/jira-run-mcp/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/jira-run-mcp/clusters` | All functional areas |
-| `gitnexus://repo/jira-run-mcp/processes` | All execution flows |
-| `gitnexus://repo/jira-run-mcp/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/jira8_mcp/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/jira8_mcp/clusters` | All functional areas |
+| `gitnexus://repo/jira8_mcp/processes` | All execution flows |
+| `gitnexus://repo/jira8_mcp/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

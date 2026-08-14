@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import axios from "axios";
 import { JiraHttpClient } from "../jira/http-client.js";
 import { buildMinimalAdfDocument } from "../jira/adf.js";
+import { HTTP_REQUEST_TIMEOUT_MS } from "../utils.js";
 
 vi.mock("axios", async () => {
   const actual = await vi.importActual<typeof import("axios")>("axios");
@@ -55,6 +56,7 @@ describe("JiraHttpClient write helpers", () => {
 
     expect(axios.create).toHaveBeenCalledWith(
       expect.objectContaining({
+        timeout: HTTP_REQUEST_TIMEOUT_MS,
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",

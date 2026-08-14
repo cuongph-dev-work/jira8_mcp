@@ -16,6 +16,8 @@ export interface GitlabRawMergeRequest {
   state?: string;
   web_url?: string;
   author?: GitlabRawUser;
+  updated_at?: string;
+  merged_at?: string | null;
 }
 
 export interface GitlabRawPosition {

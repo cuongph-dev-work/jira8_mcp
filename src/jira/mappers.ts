@@ -187,10 +187,14 @@ export function mapIssue(raw: RawIssue, baseUrl: string): JiraIssue {
 /**
  * Maps a raw Jira issue to the compact JiraIssueSummary shape.
  */
-export function mapIssueSummary(raw: RawIssue, baseUrl: string): JiraIssueSummary {
+export function mapIssueSummary(
+  raw: RawIssue,
+  baseUrl: string,
+  options?: { includeDescription?: boolean }
+): JiraIssueSummary {
   const f = raw.fields ?? {};
   const tt = f.timetracking;
-  return {
+  const summary: JiraIssueSummary = {
     key: raw.key,
     summary: f.summary ?? "(no summary)",
     status: f.status?.name ?? "Unknown",
@@ -217,6 +221,12 @@ export function mapIssueSummary(raw: RawIssue, baseUrl: string): JiraIssueSummar
     percentDone: pickNameOrValue(f.customfield_10338),
     typeOfWork: pickNameOrValue(f.customfield_10340),
   };
+
+  if (options?.includeDescription) {
+    summary.description = extractDescription(f.description);
+  }
+
+  return summary;
 }
 
 // ---------------------------------------------------------------------------
