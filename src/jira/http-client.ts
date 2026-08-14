@@ -33,6 +33,7 @@ import { normalizeEditMetaResponse } from "./edit-meta.js";
 import { mapIssue, mapIssueSummary } from "./mappers.js";
 import { normalizeUserSearchResponse } from "./user-search.js";
 import { jiraHttpError, jiraResponseError, permissionDenied, sessionExpired } from "../errors.js";
+import { HTTP_REQUEST_TIMEOUT_MS } from "../utils.js";
 import type {
   JiraAttachmentUploadResult,
   JiraCloneIssueInput,
@@ -93,6 +94,7 @@ export class JiraHttpClient {
     this.http = axios.create({
       baseURL: this.baseUrl,
       headers,
+      timeout: HTTP_REQUEST_TIMEOUT_MS,
       // Block redirects — a redirect usually means the session expired and
       // Jira is sending us back to the SSO login page.
       maxRedirects: 0,
@@ -124,13 +126,22 @@ export class JiraHttpClient {
   // jira_search_issues
   // ---------------------------------------------------------------------------
 
-  async searchIssues(jql: string, limit: number, startAt: number = 0): Promise<JiraSearchResult> {
+  async searchIssues(
+    jql: string,
+    limit: number,
+    startAt: number = 0,
+    extraFields?: string[]
+  ): Promise<JiraSearchResult> {
     const url = searchUrl(this.baseUrl);
+    const fields =
+      extraFields == null || extraFields.length === 0
+        ? SEARCH_FIELDS
+        : [...new Set([...SEARCH_FIELDS, ...extraFields])];
     const res = await this.http.post(url, {
       jql,
       startAt,
       maxResults: limit,
-      fields: SEARCH_FIELDS,
+      fields,
     });
 
     this.checkForAuthFailure(res.status, url, res.data);
@@ -144,7 +155,10 @@ export class JiraHttpClient {
     return {
       total: body.total,
       issues: (body.issues as Array<{ key: string; fields?: Record<string, unknown> }>).map(
-        (raw) => mapIssueSummary(raw, this.baseUrl)
+        (raw) =>
+          mapIssueSummary(raw, this.baseUrl, {
+            includeDescription: extraFields?.includes("description") ?? false,
+          })
       ),
     };
   }

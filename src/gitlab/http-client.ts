@@ -4,6 +4,7 @@ import type {
   GitlabRawDiscussion,
   GitlabRawMergeRequest,
 } from "../types/gitlab-api.js";
+import { HTTP_REQUEST_TIMEOUT_MS, isRetryableHttpStatus, withHttpRetry } from "../utils.js";
 import {
   mergeRequestDiscussionsUrl,
   mergeRequestUrl,
@@ -11,6 +12,11 @@ import {
 } from "./endpoints.js";
 
 export type GitlabMrState = "opened" | "merged" | "closed";
+
+export interface GitlabListMergeRequestsOptions {
+  updatedAfter?: string;
+  updatedBefore?: string;
+}
 
 /**
  * GitLab REST client authenticated with a personal access token.
@@ -31,6 +37,7 @@ export class GitlabHttpClient {
         "PRIVATE-TOKEN": token,
         Accept: "application/json",
       },
+      timeout: HTTP_REQUEST_TIMEOUT_MS,
       maxRedirects: 0,
       validateStatus: () => true,
     });
@@ -39,22 +46,27 @@ export class GitlabHttpClient {
   /** List merge requests filtered by GitLab state (opened | merged | closed). */
   async listMergeRequests(
     projectPath: string,
-    state: GitlabMrState
+    state: GitlabMrState,
+    options?: GitlabListMergeRequestsOptions
   ): Promise<GitlabRawMergeRequest[]> {
     const url = mergeRequestsUrl(this.baseUrl, projectPath);
     const all: GitlabRawMergeRequest[] = [];
     let page = 1;
 
     for (;;) {
-      const res = await this.http.get(url, {
-        params: {
-          state,
-          per_page: 100,
-          page,
-        },
-      });
+      const params: Record<string, string | number> = {
+        state,
+        per_page: 100,
+        page,
+      };
+      if (options?.updatedAfter != null) {
+        params.updated_after = options.updatedAfter;
+      }
+      if (options?.updatedBefore != null) {
+        params.updated_before = options.updatedBefore;
+      }
 
-      this.assertOk(res.status, url, res.data);
+      const res = await this.fetchOk(url, params);
 
       if (!Array.isArray(res.data)) {
         throw jiraResponseError("Unexpected GitLab merge requests response shape", res.data);
@@ -76,8 +88,7 @@ export class GitlabHttpClient {
     mrIid: number
   ): Promise<GitlabRawMergeRequest> {
     const url = mergeRequestUrl(this.baseUrl, projectPath, mrIid);
-    const res = await this.http.get(url);
-    this.assertOk(res.status, url, res.data);
+    const res = await this.fetchOk(url);
 
     const body = res.data as GitlabRawMergeRequest;
     if (!body || typeof body.iid !== "number") {
@@ -95,14 +106,10 @@ export class GitlabHttpClient {
     let page = 1;
 
     for (;;) {
-      const res = await this.http.get(url, {
-        params: {
-          per_page: 100,
-          page,
-        },
+      const res = await this.fetchOk(url, {
+        per_page: 100,
+        page,
       });
-
-      this.assertOk(res.status, url, res.data);
 
       if (!Array.isArray(res.data)) {
         throw jiraResponseError("Unexpected GitLab discussions response shape", res.data);
@@ -117,9 +124,23 @@ export class GitlabHttpClient {
     return all;
   }
 
+  private async fetchOk(
+    url: string,
+    params?: Record<string, string | number>
+  ): Promise<{ status: number; data: unknown }> {
+    return withHttpRetry(async () => {
+      const res = await this.http.get(url, { params });
+      this.assertOk(res.status, url, res.data);
+      return res;
+    });
+  }
+
   private assertOk(status: number, url: string, body: unknown): void {
     if (status >= 200 && status < 300) return;
     const text = typeof body === "string" ? body : JSON.stringify(body);
+    if (isRetryableHttpStatus(status)) {
+      throw jiraHttpError(status, url, text);
+    }
     if (status === 401 || status === 403) {
       throw jiraHttpError(
         status,

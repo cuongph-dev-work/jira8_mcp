@@ -1,7 +1,6 @@
 import { chromium, firefox, webkit } from "playwright";
-import axios from "axios";
 import { readSession, writeSession } from "./session-store.js";
-import { extractCookies } from "./session-manager.js";
+import { extractCookies, validateCookies } from "./session-manager.js";
 import type { SessionFile } from "../types.js";
 
 type BrowserEngine = "chromium" | "firefox" | "webkit";
@@ -108,28 +107,7 @@ export async function validateCandidateSession(
   baseUrl: string,
   validatePath: string
 ): Promise<boolean> {
-  const cookies = extractCookies(candidate, baseUrl);
-  const validateUrl = `${baseUrl}${validatePath}`;
-
-  try {
-    const res = await axios.get(validateUrl, {
-      headers: {
-        Cookie: cookies.cookieHeader,
-        Accept: "application/json",
-      },
-      maxRedirects: 0,
-      validateStatus: (status) => status >= 200 && status < 300,
-    });
-
-    // Guard against Jira returning HTML login page with 200 OK
-    if (typeof res.data === "string" && isLoginPage(res.data)) {
-      return false;
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
+  return validateCookies(baseUrl, validatePath, extractCookies(candidate, baseUrl));
 }
 
 // ---------------------------------------------------------------------------
@@ -147,16 +125,8 @@ function getBrowserFactory(name: BrowserEngine) {
   }
 }
 
-function isLoginPage(body: string): boolean {
-  const lower = body.toLowerCase();
-  return (
-    lower.startsWith("<!") &&
-    (lower.includes("log in") || lower.includes("login") || lower.includes("sso"))
-  );
-}
-
 // ---------------------------------------------------------------------------
-// Automatic background SSO/credential login
+// Automatic background SSO/credential login (CLI only — never call from MCP tools)
 // ---------------------------------------------------------------------------
 
 /**
@@ -194,8 +164,7 @@ export async function runAutomaticLogin(options: {
   const page = await context.newPage();
 
   try {
-    await page.goto(baseUrl);
-    await page.waitForLoadState("networkidle");
+    await page.goto(baseUrl, { timeout: 15_000, waitUntil: "domcontentloaded" });
 
     const usernameSelectors = [
       'input[name="os_username"]',

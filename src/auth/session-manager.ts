@@ -1,10 +1,11 @@
 import axios from "axios";
 import { readSession } from "./session-store.js";
 import { authRequired, sessionExpired } from "../errors.js";
+import { SESSION_VALIDATE_TIMEOUT_MS } from "../utils.js";
 import type { PlaywrightCookie, SessionCookies, SessionFile } from "../types.js";
 
-const AUTO_LOGIN_HINT =
-  "Check JIRA_EMAIL and JIRA_PASSWORD in .env (or MCP env), or run `jira-auth-login` for interactive SSO.";
+const AUTH_HINT =
+  "Run `jira-auth-login` for interactive SSO. HTTP Basic Auth (JIRA_EMAIL / JIRA_PASSWORD) only works if this Jira instance accepts it.";
 
 /** Builds an HTTP Basic Authorization value without persisting credentials. */
 export function createBasicAuthorizationHeader(username: string, password: string): string {
@@ -43,12 +44,14 @@ export function extractCookies(
 
 /**
  * Loads the session from disk and validates it against the Jira REST API.
- * If validation fails or the session file is missing, and automatic credentials
- * are configured, it attempts to perform a background login.
+ *
+ * Order (all probes are time-bounded — never launches a browser):
+ * 1. Stored cookie session, if the file exists and Jira accepts it
+ * 2. HTTP Basic Auth, if JIRA_EMAIL and JIRA_PASSWORD are configured
  *
  * Throws:
- * - `AUTH_REQUIRED` if no session file exists (and auto-login is disabled/failed)
- * - `SESSION_EXPIRED` if the session exists but Jira rejects it (and auto-login is disabled/failed)
+ * - `AUTH_REQUIRED` if no session file exists and Basic Auth is unavailable/rejected
+ * - `SESSION_EXPIRED` if the session exists but Jira rejects it (and Basic Auth failed)
  */
 export async function loadAndValidateSession(
   sessionFilePath: string,
@@ -57,99 +60,34 @@ export async function loadAndValidateSession(
 ): Promise<SessionCookies> {
   const email = process.env.JIRA_EMAIL?.trim() || undefined;
   const password = process.env.JIRA_PASSWORD || undefined;
-  const credentialsConfigured = Boolean(email && password);
 
-  if (credentialsConfigured) {
-    const authorizationHeader = createBasicAuthorizationHeader(
-      email!,
-      password!
-    );
+  const session = await readSession(sessionFilePath);
+
+  if (session) {
+    const cookies = extractCookies(session, baseUrl);
+    if (await validateCookies(baseUrl, validatePath, cookies)) {
+      return cookies;
+    }
+  }
+
+  if (email && password) {
+    const authorizationHeader = createBasicAuthorizationHeader(email, password);
     if (await validateAuthorization(baseUrl, validatePath, authorizationHeader)) {
       return { cookieHeader: "", authorizationHeader };
     }
   }
 
-  let session = await readSession(sessionFilePath);
-  let isValid = false;
-  let cookies: SessionCookies | null = null;
-
-  if (session !== null && !credentialsConfigured) {
-    cookies = extractCookies(session, baseUrl);
-    const validateUrl = `${baseUrl}${validatePath}`;
-
-    try {
-      const res = await axios.get(validateUrl, {
-        headers: {
-          Cookie: cookies.cookieHeader,
-          Accept: "application/json",
-        },
-        maxRedirects: 0,
-        validateStatus: (status) => status >= 200 && status < 300,
-      });
-
-      if (!isLoginPageResponse(res.data)) {
-        isValid = true;
-      }
-    } catch {
-      isValid = false;
-    }
-  }
-
-  if (isValid && cookies) {
-    return cookies;
-  }
-
-  let autoLoginAttempted = false;
-
-  if (credentialsConfigured) {
-    autoLoginAttempted = true;
-    try {
-      process.stderr.write("[jira-run-mcp] Session invalid or missing. Attempting automatic login...\n");
-      const { config } = await import("../config.js");
-      const { runAutomaticLogin } = await import("./playwright-auth.js");
-      await runAutomaticLogin({
-        baseUrl,
-        sessionFilePath,
-        email: email!,
-        password: password!,
-        headless: true,
-        browser: config.PLAYWRIGHT_BROWSER,
-        validatePath,
-      });
-
-      session = await readSession(sessionFilePath);
-      if (session !== null) {
-        cookies = extractCookies(session, baseUrl);
-        if (await validateCookies(baseUrl, validatePath, cookies)) {
-          return cookies;
-        }
-      }
-    } catch (loginErr: unknown) {
-      process.stderr.write(`[jira-run-mcp] Auto-login failed: ${String(loginErr)}\n`);
-      process.stderr.write(`[jira-run-mcp] ${AUTO_LOGIN_HINT}\n`);
-    }
-  }
-
-  if (session === null) {
+  if (!session) {
     throw authRequired(
-      autoLoginAttempted
-        ? `No Jira session found. Automatic login failed. ${AUTO_LOGIN_HINT}`
+      email && password
+        ? `No Jira session found. HTTP Basic Auth was rejected. ${AUTH_HINT}`
         : undefined
     );
   }
 
-  // With credentials configured, this is the last fallback after Basic Auth
-  // and automatic browser login have both failed.
-  if (!cookies) {
-    cookies = extractCookies(session, baseUrl);
-  }
-  if (cookies && (await validateCookies(baseUrl, validatePath, cookies))) {
-    return cookies;
-  }
-
   throw sessionExpired(
-    autoLoginAttempted
-      ? `Jira session has expired. Automatic login failed. ${AUTO_LOGIN_HINT}`
+    email && password
+      ? `Jira session has expired. HTTP Basic Auth was rejected. ${AUTH_HINT}`
       : undefined
   );
 }
@@ -159,33 +97,34 @@ async function validateAuthorization(
   validatePath: string,
   authorizationHeader: string
 ): Promise<boolean> {
-  try {
-    const res = await axios.get(`${baseUrl}${validatePath}`, {
-      headers: {
-        Authorization: authorizationHeader,
-        Accept: "application/json",
-      },
-      maxRedirects: 0,
-      validateStatus: (status) => status >= 200 && status < 300,
-    });
-    return res.status >= 200 && res.status < 300 && !isLoginPageResponse(res.data);
-  } catch {
-    return false;
-  }
+  return probeMyself(baseUrl, validatePath, {
+    Authorization: authorizationHeader,
+  });
 }
 
-async function validateCookies(
+export async function validateCookies(
   baseUrl: string,
   validatePath: string,
   cookies: SessionCookies
 ): Promise<boolean> {
+  return probeMyself(baseUrl, validatePath, {
+    ...(cookies.cookieHeader ? { Cookie: cookies.cookieHeader } : {}),
+  });
+}
+
+async function probeMyself(
+  baseUrl: string,
+  validatePath: string,
+  headers: Record<string, string>
+): Promise<boolean> {
   try {
     const res = await axios.get(`${baseUrl}${validatePath}`, {
       headers: {
-        ...(cookies.cookieHeader ? { Cookie: cookies.cookieHeader } : {}),
+        ...headers,
         Accept: "application/json",
       },
       maxRedirects: 0,
+      timeout: SESSION_VALIDATE_TIMEOUT_MS,
       validateStatus: (status) => status >= 200 && status < 300,
     });
     return res.status >= 200 && res.status < 300 && !isLoginPageResponse(res.data);
@@ -205,14 +144,5 @@ function isLoginPageResponse(body: unknown): boolean {
     lower.includes("<title>log in") ||
     lower.includes("id=\"login-form\"") ||
     lower.includes("sso") && lower.includes("<html")
-  );
-}
-
-function isAxiosError(err: unknown): err is { response?: { status: number } } {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "isAxiosError" in err &&
-    (err as { isAxiosError: boolean }).isAxiosError === true
   );
 }

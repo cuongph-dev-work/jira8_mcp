@@ -1075,6 +1075,25 @@ ENCODING:
         .describe(
           'Jira Project Stages (customfield_10339). Default "CODING". Other values: BASIC_DESIGN, DETAIL_DESIGN, TEST_UT, etc.'
         ),
+      dateFrom: z
+        .string()
+        .optional()
+        .describe(
+          'Inclusive start date for MR window (YYYY-MM-DD or YYYYMMDD, e.g. 20260801). Uses merged_at when mrState=merged, updated_at otherwise. Ignored when mrIid is set.'
+        ),
+      dateTo: z
+        .string()
+        .optional()
+        .describe(
+          "Inclusive end date (YYYY-MM-DD or YYYYMMDD). Defaults to today when dateFrom is set. Ignored when mrIid is set."
+        ),
+      fullSync: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          "When true, ignore incremental watermark and list all MRs for mrState. Watermark advances after successful apply."
+        ),
     },
     async (input) => {
       return handleSyncGitlabReviewDefects(input, config);

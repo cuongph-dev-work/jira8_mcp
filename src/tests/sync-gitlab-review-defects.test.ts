@@ -7,7 +7,10 @@ import { GitlabHttpClient } from "../gitlab/http-client.js";
 import { JiraHttpClient } from "../jira/http-client.js";
 import {
   appendGitlabReviewDedupIds,
+  getGitlabReviewWatermark,
   loadGitlabReviewDedupStore,
+  loadGitlabReviewWatermarks,
+  saveGitlabReviewWatermark,
 } from "../jira/gitlab-review-dedup-store.js";
 import {
   loadGitlabProjectLinks,
@@ -15,6 +18,9 @@ import {
 } from "../jira/gitlab-project-map.js";
 import {
   handleSyncGitlabReviewDefects,
+  mrMatchesDateWindow,
+  parseSyncDateInput,
+  resolveLinkListScope,
   resolveQuery,
   syncGitlabReviewDefectsSchema,
 } from "../tools/sync-gitlab-review-defects.js";
@@ -68,6 +74,71 @@ describe("syncGitlabReviewDefectsSchema", () => {
 
   it("rejects empty projectKey", () => {
     expect(syncGitlabReviewDefectsSchema.safeParse({ projectKey: "" }).success).toBe(false);
+  });
+
+  it("accepts compact dateFrom YYYYMMDD and rejects invalid date order", () => {
+    expect(
+      syncGitlabReviewDefectsSchema.parse({
+        projectKey: "PROJ",
+        dateFrom: "20260801",
+      }).dateFrom
+    ).toBe("2026-08-01");
+
+    expect(
+      syncGitlabReviewDefectsSchema.safeParse({
+        projectKey: "PROJ",
+        dateFrom: "2026-08-10",
+        dateTo: "2026-08-01",
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("parseSyncDateInput + resolveLinkListScope", () => {
+  it("parses YYYYMMDD and resolves date-range scope", () => {
+    expect(parseSyncDateInput("20260801")).toBe("2026-08-01");
+    const scope = resolveLinkListScope({
+      mrState: "merged",
+      dateFrom: "2026-08-01",
+      dateTo: "2026-08-14",
+      fullSync: false,
+    });
+    expect(scope.scopeLabel).toContain("dateFrom=2026-08-01");
+    expect(scope.listOptions?.updatedAfter).toBeDefined();
+    expect(scope.listOptions?.updatedBefore).toBeUndefined();
+    expect(scope.advanceWatermark).toBe(false);
+  });
+
+  it("uses watermark overlap for incremental scope", () => {
+    const scope = resolveLinkListScope({
+      mrState: "merged",
+      fullSync: false,
+      storedWatermark: "2026-08-14T12:00:00.000Z",
+    });
+    expect(scope.scopeLabel).toContain("incremental updated_after=");
+    expect(scope.listOptions?.updatedAfter).toBe("2026-08-12T12:00:00.000Z");
+    expect(scope.advanceWatermark).toBe(true);
+  });
+
+  it("filters merged MRs by merged_at window", () => {
+    const window = {
+      startMs: new Date("2026-08-01T00:00:00").getTime(),
+      endMs: new Date("2026-08-31T23:59:59.999").getTime(),
+    };
+    expect(
+      mrMatchesDateWindow(
+        { merged_at: "2026-08-02T10:00:00.000Z" },
+        "merged",
+        window
+      )
+    ).toBe(true);
+    expect(
+      mrMatchesDateWindow(
+        { merged_at: "2026-07-31T10:00:00.000Z" },
+        "merged",
+        window
+      )
+    ).toBe(false);
   });
 });
 
@@ -156,6 +227,40 @@ describe("gitlab project map + dedup store", () => {
     await appendGitlabReviewDedupIds(["b", "c"], file);
     const ids = await loadGitlabReviewDedupStore(file);
     expect([...ids].sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("preserves watermarks when appending dedup ids", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gitlab-dedup-watermark-"));
+    const file = join(dir, "dedup.json");
+    await saveGitlabReviewWatermark(
+      "https://gitlab.example.com",
+      "group/app",
+      "merged",
+      "2026-08-14T09:00:00.000Z",
+      file
+    );
+    await appendGitlabReviewDedupIds(["note-1"], file);
+    expect(await loadGitlabReviewDedupStore(file)).toEqual(new Set(["note-1"]));
+    expect(await getGitlabReviewWatermark("https://gitlab.example.com", "group/app", "merged", file)).toBe(
+      "2026-08-14T09:00:00.000Z"
+    );
+  });
+
+  it("preserves processed ids when saving watermark", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gitlab-dedup-watermark-ids-"));
+    const file = join(dir, "dedup.json");
+    await appendGitlabReviewDedupIds(["x"], file);
+    await saveGitlabReviewWatermark(
+      "https://gitlab.example.com",
+      "group/app",
+      "merged",
+      "2026-08-15T09:00:00.000Z",
+      file
+    );
+    expect(await loadGitlabReviewDedupStore(file)).toEqual(new Set(["x"]));
+    expect(await loadGitlabReviewWatermarks(file)).toEqual({
+      "https://gitlab.example.com|group/app|merged": "2026-08-15T09:00:00.000Z",
+    });
   });
 });
 
@@ -279,7 +384,7 @@ describe("handleSyncGitlabReviewDefects", () => {
     expect(result.content[0].text).toContain("create payload");
     expect(result.content[0].text).toContain('"issuetype"');
     expect(result.content[0].text).toContain('[Review Code][app][MR !42]');
-    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened");
+    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened", undefined);
     expect(mockCreateIssue).not.toHaveBeenCalled();
   });
 
@@ -301,7 +406,7 @@ describe("handleSyncGitlabReviewDefects", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("Candidates");
-    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened");
+    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened", undefined);
   });
 
   it("uses GITLAB_PROJECTS_JSON when provided in config", async () => {
@@ -333,7 +438,7 @@ describe("handleSyncGitlabReviewDefects", () => {
 
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("[Review Code][json-repo][MR !42]");
-    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened");
+    expect(mockListMrs).toHaveBeenCalledWith("group/app", "opened", undefined);
   });
 
   it("processes a single MR when mrIid is set", async () => {
@@ -411,6 +516,28 @@ describe("handleSyncGitlabReviewDefects", () => {
           issues: [
             {
               key: "PROJ-77",
+              summary: "[Review Code][app][MR !42] existing",
+              status: "Open",
+              issueType: "Review Defect",
+              assignee: null,
+              priority: null,
+              created: "",
+              updated: "",
+              dueDate: null,
+              url: "https://jira.example.com/browse/PROJ-77",
+              description:
+                "gitlab-note-id: https://gitlab.example.com/group/app/-/merge_requests/42#note_1",
+              originalEstimate: null,
+              remainingEstimate: null,
+              timeSpent: null,
+              defectOwner: null,
+              planStartDate: null,
+              actualStartDate: null,
+              actualEndDate: null,
+              severity: null,
+              defectOrigin: null,
+              percentDone: null,
+              typeOfWork: null,
             },
           ],
         };
@@ -426,7 +553,9 @@ describe("handleSyncGitlabReviewDefects", () => {
     expect(dryRunResult.content[0].text).toContain("Candidates (0)");
     expect(dryRunResult.content[0].text).toContain("Skipped MRs (already in Jira)");
     expect(dryRunResult.content[0].text).toContain("MR !42");
+    expect(dryRunResult.content[0].text).toContain("skipped before fetch");
     expect(dryRunResult.content[0].text).toContain("PROJ-77");
+    expect(mockListDiscussions).not.toHaveBeenCalled();
 
     const applyResult = await handleSyncGitlabReviewDefects(
       { projectKey: "PROJ", dryRun: false, mrState: "opened" },
@@ -435,6 +564,7 @@ describe("handleSyncGitlabReviewDefects", () => {
     );
     expect(applyResult.content[0].text).toContain("Created (0)");
     expect(mockCreateIssue).not.toHaveBeenCalled();
+    expect(mockListDiscussions).not.toHaveBeenCalled();
   });
 
   it("checks MR existence only once per MR even with multiple notes", async () => {
@@ -486,6 +616,65 @@ describe("handleSyncGitlabReviewDefects", () => {
       !(jql as string).includes("#note_")
     );
     expect(mrScopeCalls).toHaveLength(1);
+    expect(mockListDiscussions).toHaveBeenCalledTimes(1);
+  });
+
+  it("apply continues on partial create failures and only dedups successes", async () => {
+    mockFindUsers.mockImplementation(async (query: string) => [
+      {
+        name: query,
+        key: query,
+        displayName: query,
+        emailAddress: query,
+        active: true,
+      },
+    ]);
+    mockListDiscussions.mockResolvedValue([
+      {
+        id: "d1",
+        notes: [
+          {
+            id: 10,
+            body: "First comment",
+            system: false,
+            created_at: "2026-07-15T10:00:00.000Z",
+            author: { username: "reviewer1" },
+          },
+        ],
+      },
+      {
+        id: "d2",
+        notes: [
+          {
+            id: 12,
+            body: "Second comment",
+            system: false,
+            created_at: "2026-07-15T12:00:00.000Z",
+            author: { username: "reviewer1" },
+          },
+        ],
+      },
+    ]);
+    mockCreateIssue
+      .mockResolvedValueOnce({
+        id: "1",
+        key: "PROJ-101",
+        url: "https://jira.example.com/browse/PROJ-101",
+      })
+      .mockRejectedValueOnce(new Error("create failed"));
+
+    const result = await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: false, mrState: "opened" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+
+    expect(result.content[0].text).toContain("PROJ-101");
+    expect(result.content[0].text).toContain("Failed (1)");
+    expect(mockCreateIssue).toHaveBeenCalledTimes(2);
+    const ids = await loadGitlabReviewDedupStore(dedupFile);
+    expect(ids.has("https://gitlab.example.com|group/app|42|10")).toBe(true);
+    expect(ids.has("https://gitlab.example.com|group/app|42|12")).toBe(false);
   });
 
   it("apply creates Review Defect and updates local dedup", async () => {
@@ -536,5 +725,180 @@ describe("handleSyncGitlabReviewDefects", () => {
 
     expect(result.content[0].text).toContain("Skipped duplicates");
     expect(result.content[0].text).toContain("group/app|42|10");
+  });
+
+  it("uses updated_after when watermark exists", async () => {
+    await saveGitlabReviewWatermark(
+      "https://gitlab.example.com",
+      "group/app",
+      "merged",
+      "2026-08-14T12:00:00.000Z",
+      dedupFile
+    );
+    mockFindUsers.mockResolvedValue([]);
+
+    await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: true, mrState: "merged" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+
+    expect(mockListMrs).toHaveBeenCalledWith("group/app", "merged", {
+      updatedAfter: "2026-08-12T12:00:00.000Z",
+    });
+  });
+
+  it("fullSync ignores watermark for listing", async () => {
+    await saveGitlabReviewWatermark(
+      "https://gitlab.example.com",
+      "group/app",
+      "merged",
+      "2026-08-14T12:00:00.000Z",
+      dedupFile
+    );
+    mockFindUsers.mockResolvedValue([]);
+
+    await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: true, mrState: "merged", fullSync: true },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+
+    expect(mockListMrs).toHaveBeenCalledWith("group/app", "merged", undefined);
+  });
+
+  it("dateFrom filters merged MRs client-side", async () => {
+    mockListMrs.mockResolvedValue([
+      {
+        iid: 50,
+        title: "In range",
+        merged_at: "2026-08-02T10:00:00.000Z",
+        author: { username: "thanhnn" },
+      },
+      {
+        iid: 51,
+        title: "Out of range",
+        merged_at: "2026-07-01T10:00:00.000Z",
+        author: { username: "thanhnn" },
+      },
+    ]);
+    mockFindUsers.mockResolvedValue([]);
+
+    await handleSyncGitlabReviewDefects(
+      {
+        projectKey: "PROJ",
+        dryRun: true,
+        mrState: "merged",
+        dateFrom: "20260801",
+      },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+
+    expect(mockListMrs).toHaveBeenCalledWith(
+      "group/app",
+      "merged",
+      expect.objectContaining({ updatedAfter: expect.any(String) })
+    );
+    expect(mockListDiscussions).toHaveBeenCalledTimes(1);
+    expect(mockListDiscussions).toHaveBeenCalledWith("group/app", 50);
+  });
+
+  it("advances watermark on successful apply but not on dryRun", async () => {
+    mockFindUsers.mockImplementation(async (query: string) => [
+      {
+        name: query,
+        key: query,
+        displayName: query,
+        emailAddress: query,
+        active: true,
+      },
+    ]);
+    mockCreateIssue.mockResolvedValue({
+      id: "1",
+      key: "PROJ-100",
+      url: "https://jira.example.com/browse/PROJ-100",
+    });
+
+    await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: true, mrState: "merged" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+    expect(
+      await getGitlabReviewWatermark(
+        "https://gitlab.example.com",
+        "group/app",
+        "merged",
+        dedupFile
+      )
+    ).toBeUndefined();
+
+    await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: false, mrState: "merged" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+    expect(
+      await getGitlabReviewWatermark(
+        "https://gitlab.example.com",
+        "group/app",
+        "merged",
+        dedupFile
+      )
+    ).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("does not advance watermark when collection fails or date range is used", async () => {
+    mockFindUsers.mockResolvedValue([]);
+    mockListDiscussions.mockRejectedValue(new Error("discussions failed"));
+
+    await handleSyncGitlabReviewDefects(
+      { projectKey: "PROJ", dryRun: false, mrState: "merged" },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+    expect(
+      await getGitlabReviewWatermark(
+        "https://gitlab.example.com",
+        "group/app",
+        "merged",
+        dedupFile
+      )
+    ).toBeUndefined();
+
+    mockListDiscussions.mockResolvedValue([
+      {
+        id: "d1",
+        notes: [
+          {
+            id: 10,
+            body: "Please fix null check",
+            system: false,
+            created_at: "2026-07-15T10:00:00.000Z",
+            author: { username: "reviewer1" },
+          },
+        ],
+      },
+    ]);
+
+    await handleSyncGitlabReviewDefects(
+      {
+        projectKey: "PROJ",
+        dryRun: false,
+        mrState: "merged",
+        dateFrom: "20260801",
+      },
+      mockConfig,
+      { gitlabProjectsFile: mapFile, gitlabDedupFile: dedupFile }
+    );
+    expect(
+      await getGitlabReviewWatermark(
+        "https://gitlab.example.com",
+        "group/app",
+        "merged",
+        dedupFile
+      )
+    ).toBeUndefined();
   });
 });

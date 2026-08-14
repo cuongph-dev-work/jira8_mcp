@@ -170,6 +170,9 @@ export interface JiraIssueSummary {
   dueDate: string | null;
   url: string;
 
+  /** Present when description was requested in search fields. */
+  description?: string | null;
+
   // Time tracking
   originalEstimate: string | null;
   remainingEstimate: string | null;
