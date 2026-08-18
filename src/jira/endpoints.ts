@@ -31,6 +31,10 @@ export function issueCommentByIdUrl(baseUrl: string, issueKey: string, commentId
   return `${issueCommentUrl(baseUrl, issueKey)}/${encodeURIComponent(commentId)}`;
 }
 
+export function issueChangelogUrl(baseUrl: string, issueKey: string): string {
+  return `${issueUrl(baseUrl, issueKey)}/changelog`;
+}
+
 export function issueAssignUrl(baseUrl: string, issueKey: string): string {
   return `${issueUrl(baseUrl, issueKey)}/assignee`;
 }
@@ -187,12 +191,15 @@ export const ISSUE_FIELDS: string[] = [
 export const SEARCH_FIELDS: string[] = [
   "summary",
   "status",
+  "statuscategory",
   "issuetype",
   "assignee",
   "priority",
   "created",
   "updated",
   "duedate",
+  "labels",
+  "description",
   "timetracking",
 
   // Custom — People
@@ -209,5 +216,6 @@ export const SEARCH_FIELDS: string[] = [
 
   // Custom — Work/Progress
   CUSTOM_FIELD.PERCENT_DONE,
+  CUSTOM_FIELD.PROGRESS_WBSGANTT,
   CUSTOM_FIELD.TYPE_OF_WORK,
 ];

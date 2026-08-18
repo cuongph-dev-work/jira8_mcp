@@ -27,12 +27,19 @@ Sync top-level review comments from GitLab merge requests into Jira **Review Def
 | `dryRun` | `boolean` | ❌ | Default `true`. Preview only when true; create when `false` |
 | `userOverrides` | `Record<string, string>` | ❌ | GitLab username → Jira username or email |
 | `projectStage` | `string` | ❌ | Jira Project Stages key. Default `CODING`. Examples: `BASIC_DESIGN`, `DETAIL_DESIGN`, `TEST_UT` |
+| `dateFrom` | `string` | ❌ | Inclusive start date (`YYYY-MM-DD` or `YYYYMMDD`, e.g. `20260801`). Filters by `merged_at` when `mrState=merged`, else `updated_at`. Ignored when `mrIid` is set |
+| `dateTo` | `string` | ❌ | Inclusive end date; defaults to today when `dateFrom` is set. Ignored when `mrIid` is set |
+| `fullSync` | `boolean` | ❌ | Default `false`. When `true`, ignore incremental watermark and list all MRs for `mrState` |
 
 ## Behaviour
 
-- Scope by `mrState` **or** a single `mrIid`
+- Scope by `mrState` **or** a single `mrIid`, optionally narrowed by `dateFrom`/`dateTo`
+- **Incremental sync (default):** stores a per-repo watermark in the dedup JSON (`watermarks` key). Subsequent runs pass GitLab `updated_after` with a 2-day overlap. Watermark advances only after a successful apply (`dryRun: false`) with no GitLab collection failures for that repo
+- **Date range:** explicit historical window; does not read or advance the watermark
+- **`fullSync: true`:** ignores watermark for listing; advances watermark after successful apply
 - Only **top-level** human discussion notes (ignores replies and system notes)
-- MR-level safety check: if Jira already has any Review Defect mentioning `/{projectPath}/-/merge_requests/{mrIid}`, the tool skips **all** notes from that MR
+- MR-level safety check: if Jira already has any Review Defect mentioning `/{projectPath}/-/merge_requests/{mrIid}`, the tool skips **all** notes from that MR **before** fetching GitLab discussions (fast path)
+- Performance: GitLab discussion fetches run with bounded concurrency (default 8); Jira dedup searches and issue creates are batched / pooled to avoid N+1 API calls
 - Apply uses the same create-issue validation path as `jira_create_issue` / `jira_preview_create_issue` (`buildCreateIssuePayload` + `createIssueFromFields`)
 - Dedup via Jira text search for `gitlab-note-id: <MR note URL>` (e.g. `…/merge_requests/93#note_1625816`) **and** a local dedup store. Default path:
   - source checkout: `.jira/gitlab-review-defects.json`
@@ -108,5 +115,16 @@ Closed MRs + apply with overrides:
     "thanhnn": "thanhnn@runsystem.net",
     "reviewer1": "alice.smith"
   }
+}
+```
+
+Merged MRs from a start date (compact `YYYYMMDD`):
+
+```json
+{
+  "projectKey": "UNI",
+  "mrState": "merged",
+  "dateFrom": "20260801",
+  "dryRun": true
 }
 ```
