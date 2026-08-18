@@ -22,6 +22,7 @@ import { handleGetComments } from "./tools/get-comments.js";
 import { handleGetComponents } from "./tools/get-components.js";
 import { handleGetAuditContext } from "./tools/get-audit-context.js";
 import { handleGetIssue } from "./tools/get-issue.js";
+import { handleGetIssueHistory } from "./tools/get-issue-history.js";
 import { handleGetIssueContext } from "./tools/get-issue-context.js";
 import { handleGetIssueLinks } from "./tools/get-issue-links.js";
 import { handleGetCreateMeta } from "./tools/get-create-meta.js";
@@ -34,6 +35,9 @@ import { handleGetTransitions } from "./tools/get-transitions.js";
 import { handleLinkIssues } from "./tools/link-issues.js";
 import { handlePreviewCreateIssue } from "./tools/preview-create-issue.js";
 import { handleSearchIssues } from "./tools/search-issues.js";
+import { handleFindStaleIssues, findStaleIssuesSchema } from "./tools/find-stale-issues.js";
+import { handleJiraDaily, jiraDailySchema } from "./tools/daily.js";
+import { handleJiraDailyBriefing, jiraDailyBriefingSchema } from "./tools/daily-briefing.js";
 import { handleSmartSearch, smartSearchToolSchema } from "./tools/smart-search.js";
 import { handleTransitionIssue } from "./tools/transition-issue.js";
 import { handleUpdateComment } from "./tools/update-comment.js";
@@ -124,6 +128,17 @@ ATTACHMENTS:
     async (input) => {
       return handleGetIssue(input, config);
     }
+  );
+
+  server.tool(
+    "jira_get_issue_history",
+    "Return the paginated changelog for a Jira issue, including who changed each field and when.",
+    {
+      issueKey: z.string().describe("Jira issue key, e.g. PROJ-123"),
+      startAt: z.number().int().min(0).optional().default(0).describe("Zero-based history offset."),
+      maxResults: z.number().int().min(1).max(100).optional().default(50).describe("Number of history entries (1-100)."),
+    },
+    async (input) => handleGetIssueHistory(input, config)
   );
 
   // Tool: jira_get_issue_context
@@ -284,6 +299,32 @@ DATE FORMATS: yyyy/MM/dd, period (-5d, -1w), date functions (startOfMonth(), end
     async (input) => {
       return handleSearchIssues(input, config);
     }
+  );
+
+  // Tool: jira_find_stale_issues
+  server.tool(
+    "jira_find_stale_issues",
+    `Find Jira issues that have not been updated for at least N days and are not in Cancel or Closed status.
+
+Returns a compact, paginated issue list ordered from least recently updated. This is a read-only search tool; use jira_get_issue for full details.`,
+    findStaleIssuesSchema.shape,
+    async (input) => {
+      return handleFindStaleIssues(input, config);
+    },
+  );
+
+  server.tool(
+    "jira_daily",
+    "Return a read-only daily Jira project report with counts, status distribution, due/overdue work, weighted progress, blocker signals, and navigation hints.",
+    jiraDailySchema.shape,
+    async (input) => handleJiraDaily(input, config)
+  );
+
+  server.tool(
+    "jira_daily_briefing",
+    "Produce a read-only Vietnamese management briefing for one Jira project using the authoritative jira_daily report and limited issue evidence lookups.",
+    jiraDailyBriefingSchema.shape,
+    async (input) => handleJiraDailyBriefing(input, config)
   );
 
   server.tool(

@@ -13,6 +13,21 @@
 
 // ========================== Tempo Timesheets v4 ============================
 
+/** Raw issue item returned by Jira POST /rest/api/2/search. */
+export interface JiraRawSearchIssue {
+  key: string;
+  self?: string;
+  fields?: Record<string, unknown>;
+}
+
+/** Raw search response returned by Jira POST /rest/api/2/search. */
+export interface JiraRawSearchResponse {
+  total: number;
+  startAt?: number;
+  maxResults?: number;
+  issues: JiraRawSearchIssue[];
+}
+
 /** Nested issue object in Tempo worklog response */
 export interface TempoRawIssue {
   id: number;
@@ -183,3 +198,25 @@ export interface TempoRawExportFilterResponse {
   uuid?: string;
 }
 
+export interface JiraRawChangelogItem {
+  field?: string;
+  fieldtype?: string;
+  from?: string | null;
+  fromString?: string | null;
+  to?: string | null;
+  toString?: string | null;
+}
+
+export interface JiraRawChangelogHistory {
+  id?: string;
+  author?: { displayName?: string; name?: string } | null;
+  created?: string;
+  items?: JiraRawChangelogItem[];
+}
+
+export interface JiraRawChangelogResponse {
+  startAt?: number;
+  maxResults?: number;
+  total?: number;
+  histories?: JiraRawChangelogHistory[];
+}

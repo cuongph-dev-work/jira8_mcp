@@ -39,7 +39,7 @@ interface RawIssueFields {
   // Standard
   summary?: string;
   description?: RawDescription | string | null;
-  status?: { name?: string };
+  status?: { name?: string; statusCategory?: { key?: string; name?: string } };
   resolution?: { name?: string } | null;
   assignee?: RawUser | null;
   reporter?: RawUser | null;
@@ -83,6 +83,7 @@ interface RawIssueFields {
 
   // Custom — Work/Progress
   customfield_10338?: RawNamedValue | null; // % Done
+  customfield_11919?: RawNamedValue | string | number | null; // Progress (WBSGantt)
   customfield_10340?: RawNamedValue | null; // Type of Work
 }
 
@@ -198,6 +199,7 @@ export function mapIssueSummary(
     key: raw.key,
     summary: f.summary ?? "(no summary)",
     status: f.status?.name ?? "Unknown",
+    statusCategory: f.status?.statusCategory?.key ?? f.status?.statusCategory?.name ?? null,
     issueType: f.issuetype?.name ?? "Unknown",
     assignee: f.assignee?.displayName ?? null,
     priority: f.priority?.name ?? null,
@@ -205,9 +207,11 @@ export function mapIssueSummary(
     updated: f.updated ?? "",
     dueDate: f.duedate ?? null,
     url: `${baseUrl}/browse/${raw.key}`,
+    labels: f.labels ?? [],
 
     // Time tracking
     originalEstimate: tt?.originalEstimate ?? null,
+    originalEstimateSeconds: parseEstimateSeconds(tt?.originalEstimate),
     remainingEstimate: tt?.remainingEstimate ?? null,
     timeSpent: tt?.timeSpent ?? null,
 
@@ -219,6 +223,7 @@ export function mapIssueSummary(
     severity: pickNameOrValue(f.customfield_10326),
     defectOrigin: pickNameOrValue(f.customfield_10336),
     percentDone: pickNameOrValue(f.customfield_10338),
+    progressWbsGantt: pickNameOrValue(f.customfield_11919),
     typeOfWork: pickNameOrValue(f.customfield_10340),
   };
 
@@ -229,13 +234,25 @@ export function mapIssueSummary(
   return summary;
 }
 
+function parseEstimateSeconds(value: string | undefined): number | null {
+  if (!value) return null;
+  let total = 0;
+  for (const match of value.matchAll(/(\d+(?:\.\d+)?)\s*([wdhm])/gi)) {
+    const amount = Number(match[1]);
+    const unit = match[2]?.toLowerCase();
+    total += amount * (unit === "w" ? 144000 : unit === "d" ? 28800 : unit === "h" ? 3600 : 60);
+  }
+  return total > 0 ? total : null;
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
 /** Extracts the human-readable value from a Jira select/radio field object. */
-function pickNameOrValue(field: RawNamedValue | null | undefined): string | null {
+function pickNameOrValue(field: RawNamedValue | string | number | null | undefined): string | null {
   if (!field) return null;
+  if (typeof field === "string" || typeof field === "number") return String(field);
   return field.value ?? field.name ?? null;
 }
 

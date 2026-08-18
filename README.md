@@ -17,6 +17,7 @@ An internal MCP (Model Context Protocol) server for Jira 8, using SSO session bo
 - 🔍 `jira_get_issue` — fetch a single issue by key
 - 🔎 `jira_search_issues` — execute JQL and return a compact issue list
 - 🔎 `jira_smart_search` — search by issue key, JQL, or natural-language filters
+- 🗓️ `jira_daily_briefing` — fixed Vietnamese project delivery briefing for managers
 - ⏱️ `jira_add_worklog` — log work on a Jira issue through Tempo Timesheets
 - 📝 `jira_create_issue` — create an issue using issue-type-specific required and optional fields
 - 💬 `jira_add_comment` — add plain-text or ADF comments to an issue
@@ -287,6 +288,26 @@ Execute a JQL query and return a compact issue list.
 | `limit` | `number` | Max results (1–50, default 10) |
 
 **Output:** Total count + list of issues (key, summary, status, assignee, priority, updated, URL).
+
+---
+
+### `jira_daily`
+
+Return a read-only daily Jira project report with counts, status/progress distribution, due and overdue work, weighted progress, blocker/risk signals, analysis, and navigation hints.
+
+**Input:** `projectKey` (required), optional `date` (`yyyy-MM-dd`, local today by default), `maxIssues` (1-200, default 50), and `maxBlockers` (1-50, default 20).
+
+**Docs:** [`docs/tools/jira_daily.md`](docs/tools/jira_daily.md)
+
+---
+
+### `jira_daily_briefing`
+
+Turn the authoritative daily project data into a fixed-format Vietnamese briefing for a project manager. The tool is read-only and limits issue evidence lookups to the highest-impact concerns.
+
+**Input:** `projectKey` (required), optional `date`, `maxConcerns` (1-20, default 5), and `audience` (default `project manager`).
+
+**Docs:** [`docs/tools/jira_daily_briefing.md`](docs/tools/jira_daily_briefing.md)
 
 ---
 

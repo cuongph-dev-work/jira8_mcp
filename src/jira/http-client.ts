@@ -7,6 +7,7 @@ import {
   issueAttachmentUrl,
   issueCommentUrl,
   issueCommentByIdUrl,
+  issueChangelogUrl,
   issueEditMetaUrl,
   issueAssignUrl,
   issueLinkUrl,
@@ -44,6 +45,7 @@ import type {
   JiraComponent,
   JiraEditMetaResult,
   JiraIssue,
+  JiraIssueHistoryResult,
   JiraIssueLinkResult,
   JiraIssueLinksResult,
   JiraIssueTransition,
@@ -68,6 +70,8 @@ import type {
   TempoRawTeam,
   TempoRawApprovalLogResponse,
   TempoRawExportFilterResponse,
+  JiraRawChangelogResponse,
+  JiraRawSearchResponse,
 } from "../types/jira-api.js";
 
 // ---------------------------------------------------------------------------
@@ -147,7 +151,7 @@ export class JiraHttpClient {
     this.checkForAuthFailure(res.status, url, res.data);
     this.assertOk(res.status, url, res.data);
 
-    const body = res.data as { total?: number; issues?: unknown[] };
+    const body = res.data as Partial<JiraRawSearchResponse>;
     if (!body || typeof body.total !== "number" || !Array.isArray(body.issues)) {
       throw jiraResponseError("Unexpected search response shape", body);
     }
@@ -271,6 +275,56 @@ export class JiraHttpClient {
       created: String(raw.created ?? ""),
       updated: String(raw.updated ?? ""),
     }));
+  }
+
+  async getIssueHistory(issueKey: string, startAt = 0, maxResults = 50): Promise<JiraIssueHistoryResult> {
+    const url = issueChangelogUrl(this.baseUrl, issueKey);
+    const res = await this.http.get(url, { params: { startAt, maxResults } });
+    this.checkForAuthFailure(res.status, url, res.data);
+    let body: JiraRawChangelogResponse;
+    if (res.status === 404) {
+      // Jira 8 deployments may not expose the dedicated changelog resource.
+      // The issue endpoint still supports changelog expansion (usually capped at 5 entries).
+      const fallbackUrl = issueUrl(this.baseUrl, issueKey);
+      const fallback = await this.http.get(fallbackUrl, { params: { expand: "changelog" } });
+      this.checkForAuthFailure(fallback.status, fallbackUrl, fallback.data);
+      this.assertOk(fallback.status, fallbackUrl, fallback.data);
+      const issueBody = fallback.data as { changelog?: JiraRawChangelogResponse };
+      body = issueBody.changelog ?? {};
+      if (Array.isArray(body.histories)) {
+        body = {
+          ...body,
+          histories: body.histories.slice(startAt, startAt + maxResults),
+          startAt,
+          maxResults,
+        };
+      }
+    } else {
+      this.assertOk(res.status, url, res.data);
+      body = res.data as JiraRawChangelogResponse;
+    }
+    if (!body || typeof body !== "object" || !Array.isArray(body.histories)) {
+      throw jiraResponseError("Unexpected issue changelog response shape", body);
+    }
+    return {
+      issueKey,
+      startAt: typeof body.startAt === "number" ? body.startAt : startAt,
+      maxResults: typeof body.maxResults === "number" ? body.maxResults : maxResults,
+      total: typeof body.total === "number" ? body.total : body.histories.length,
+      histories: body.histories.map((history) => ({
+        id: history.id ?? "",
+        author: history.author?.displayName ?? history.author?.name ?? null,
+        created: history.created ?? "",
+        items: (history.items ?? []).map((item) => ({
+          field: item.field ?? "",
+          fieldType: item.fieldtype ?? "",
+          from: item.from ?? null,
+          fromString: item.fromString ?? null,
+          to: item.to ?? null,
+          toString: item.toString ?? null,
+        })),
+      })),
+    };
   }
 
   async addComment(

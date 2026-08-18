@@ -91,6 +91,7 @@ export interface JiraIssue {
   // --- Classification ---
   issueType: string;
   status: string;
+  statusCategory?: string | null;
   resolution: string | null;
   priority: string | null;
   labels: string[];
@@ -162,6 +163,7 @@ export interface JiraIssueSummary {
   key: string;
   summary: string;
   status: string;
+  statusCategory?: string | null;
   issueType: string;
   assignee: string | null;
   priority: string | null;
@@ -169,12 +171,14 @@ export interface JiraIssueSummary {
   updated: string;
   dueDate: string | null;
   url: string;
+  labels?: string[];
 
   /** Present when description was requested in search fields. */
   description?: string | null;
 
   // Time tracking
   originalEstimate: string | null;
+  originalEstimateSeconds?: number | null;
   remainingEstimate: string | null;
   timeSpent: string | null;
 
@@ -193,6 +197,8 @@ export interface JiraIssueSummary {
   defectOrigin: string | null;
   /** customfield_10338 — % Done */
   percentDone: string | null;
+  /** customfield_11919 — Progress (WBSGantt) */
+  progressWbsGantt?: string | null;
   /** customfield_10340 — Type of Work */
   typeOfWork: string | null;
 }
@@ -266,6 +272,30 @@ export interface JiraCommentResult {
   id: string;
   issueKey: string;
   url: string;
+}
+
+export interface JiraIssueHistoryItem {
+  field: string;
+  fieldType: string;
+  from: string | null;
+  fromString: string | null;
+  to: string | null;
+  toString: string | null;
+}
+
+export interface JiraIssueHistoryEntry {
+  id: string;
+  author: string | null;
+  created: string;
+  items: JiraIssueHistoryItem[];
+}
+
+export interface JiraIssueHistoryResult {
+  issueKey: string;
+  startAt: number;
+  maxResults: number;
+  total: number;
+  histories: JiraIssueHistoryEntry[];
 }
 
 export interface JiraIssueLinkResult {
