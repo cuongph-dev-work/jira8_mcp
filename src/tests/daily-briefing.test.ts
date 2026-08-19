@@ -88,13 +88,16 @@ describe("handleJiraDailyBriefing", () => {
     expect(mockSearchIssues).toHaveBeenCalledTimes(4);
     expect(mockGetIssue).toHaveBeenCalledTimes(2);
     const text = result.content[0]?.text ?? "";
-    for (const heading of ["## Daily Delivery Briefing", "### Executive summary", "### Top concerns", "### On track", "### Questions for owners", "### Management decisions needed", "### Data limitations"]) {
+    for (const heading of ["**Daily brief dự án PROJ — 18/08/2026**", "**Tổng quan: 🟠 / cần theo dõi**", "**Các điểm cần quản lý chú ý**", "**Việc cần chốt hôm nay**"]) {
       expect(text).toContain(heading);
     }
-    expect(text).toContain("Project: PROJ");
-    expect(text).toContain("Overall: Amber");
-    expect(text).toContain("PROJ-1");
-    expect(text).toContain("Jira fact");
+    expect(text).toContain("[PROJ-1](https://jira.example.com/browse/PROJ-1)");
+    expect(text).toContain("[PROJ-2](https://jira.example.com/browse/PROJ-2)");
+    expect(text).toContain("phát hiện tín hiệu blocker");
+    expect(text).toContain("quá hạn từ 17/08");
+    expect(text).toContain("Báo cáo chỉ đọc, không có thay đổi nào được ghi vào Jira.");
+    expect(text).not.toContain("Overall: Amber");
+    expect(text).not.toContain("## Daily Delivery Briefing");
   });
 
   it("returns Green and N/A progress for an empty project", async () => {
@@ -102,9 +105,11 @@ describe("handleJiraDailyBriefing", () => {
     mockSearchIssues.mockResolvedValue({ total: 0, issues: [] });
     const result = await handleJiraDailyBriefing({ projectKey: "PROJ", date: "2026-08-18" }, config);
     const text = result.content[0]?.text ?? "";
-    expect(text).toContain("Overall: Green");
+    expect(text).toContain("**Tổng quan: 🟢 / ổn**");
     expect(text).toContain("Weighted progress: N/A");
-    expect(text).toContain("no risk signal");
+    expect(text).toContain("Không có tín hiệu rủi ro từ dữ liệu Jira hiện tại.");
+    expect(text).toContain("Không có việc cần chốt từ dữ liệu Jira hiện tại.");
+    expect(text).not.toContain("Overall: Green");
     expect(mockGetIssue).not.toHaveBeenCalled();
   });
 
