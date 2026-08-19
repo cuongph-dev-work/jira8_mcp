@@ -34,7 +34,7 @@ If `projectKey` is missing or invalid, ask for/correct it before calling Jira.
    `jira_get_issue_history` only for the highest-impact issues, up to five by
    default.
 6. Produce the fixed Vietnamese briefing format below.
-7. End with up to three owner questions and two management decisions.
+7. End with numbered “Việc cần chốt hôm nay” items only when matching signals exist.
 
 The agent must distinguish Jira facts, detected signals, interpretation, and
 recommended management attention. It must not infer causes, ETAs, or promises
@@ -42,64 +42,51 @@ that Jira does not support.
 
 ## Severity
 
-- **Red:** serious dependency/blocker with overdue impact, substantial overdue
+- **🔴 / cần xử lý ngay:** serious dependency/blocker with overdue impact, substantial overdue
   delivery risk, or clear evidence that a deadline is threatened.
-- **Amber:** overdue/stale work, heuristic blocker evidence, or significant
+- **🟠 / cần theo dõi:** overdue/stale work, heuristic blocker evidence, or significant
   missing ownership/progress data without confirmed critical dependency.
-- **Green:** no material delivery risk signals in the available Jira data.
+- **🟢 / ổn:** no material delivery risk signals in the available Jira data.
 
 ## Fixed Output Format
 
 ```text
-## Daily Delivery Briefing
+**Daily brief dự án <projectKey> — <DD/MM/YYYY>**
 
-Project: <projectKey>
-Date: <date>
-Overall: Green | Amber | Red
+**Tổng quan: 🟢 / ổn | 🟠 / cần theo dõi | 🔴 / cần xử lý ngay**
 
-### Executive summary
-<2-4 concise sentences>
+- N issue đang active
+- N issue đang In Progress
+- N issue đã hoàn thành
+- N issue đến hạn hôm nay
+- N issue quá hạn
+- Weighted progress: **N,N%** | N/A
 
-- Active:
-- In progress:
-- Done:
-- Due today:
-- Overdue:
-- Weighted progress:
+**Các điểm cần quản lý chú ý**
 
-### Top concerns
-1. <ISSUE-KEY> - <short description>
-   - Severity: <High | Medium | Risk>
-   - Evidence: <Jira evidence>
-   - Owner: <assignee or Unassigned>
-   - Management attention: <specific attention>
+- [ISSUE-KEY](url) — <summary>: trạng thái <status>, <signal>; owner <name>|chưa có owner.
 
-### On track
-- <up to three evidence-backed positive points>
+**Việc cần chốt hôm nay**
 
-### Questions for owners
-- <specific question>
+1. <action only when the matching signal exists>
 
-### Management decisions needed
-- <decision or None identified>
-
-### Data limitations
-- <only when data is missing or analysis is partial>
+Báo cáo chỉ đọc, không có thay đổi nào được ghi vào Jira.
 ```
 
-The section order and headings are fixed. The agent may omit empty list items,
-but it must preserve all headings. It must not reproduce the complete Jira
-issue list when no issue is a concern.
+The section order and headings are fixed. Issue keys are markdown links.
+The agent may omit empty action items, but it must preserve all headings.
+It must not reproduce the complete Jira issue list when no issue is a concern.
 
 ## Error and Empty-Data Behavior
 
-- No issues: report the project as Green and state that no risk signal was
+- No issues: report the project as `🟢 / ổn` and state that no risk signal was
   found in the current Jira data.
-- Weighted progress with no valid sample: show `N/A`, never `0%`.
+- Weighted progress with no valid sample: show `N/A`, never `0%`. If the
+  computed value is `0,0%`, add a note to re-check estimates.
 - Authentication/search failure: explain that no reliable briefing can be
   produced and do not fabricate a report.
 - Partial issue-link failure: preserve the base report and disclose the
-  number of failed dependency lookups under `Data limitations`.
+  number of failed dependency lookups in a one-line note after the actions.
 - Write requests: explain that this agent is read-only and may only recommend
   Jira actions.
 

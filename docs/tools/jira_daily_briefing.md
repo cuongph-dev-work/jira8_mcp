@@ -9,15 +9,19 @@ Produce a fixed-format Vietnamese delivery briefing for one Jira project. The to
 | `projectKey` | `string` | required | Jira project key, for example `PROJ` |
 | `date` | `string` | local today | Report date in `yyyy-MM-dd` format |
 | `maxConcerns` | `number` | `5` | Maximum concerns and issue-evidence lookups (1-20) |
-| `audience` | `string` | `project manager` | Audience label used in the executive summary |
+| `audience` | `string` | `project manager` | Audience label (kept for compatibility; not shown in the briefing) |
 
 ## Output
 
-The headings are always emitted in this order: `Executive summary`, `Top concerns`, `On track`, `Questions for owners`, `Management decisions needed`, and `Data limitations`. Each concern includes severity, Jira evidence, owner, and a concrete management-attention item. Confirmed Jira dependency links are distinguished from heuristic text signals.
+Headings are always emitted in this order: title (`Daily brief dự án …`), `Tổng quan`, `Các điểm cần quản lý chú ý`, and `Việc cần chốt hôm nay`. Issue keys are markdown links `[KEY](url)`. Confirmed Jira dependency links are distinguished from heuristic text signals.
 
-Severity is `Red` for a high-impact confirmed dependency or overdue dependency, `Amber` for material overdue/stale/heuristic/missing-data signals, and `Green` when no material signal is present. Empty projects return Green with weighted progress `N/A`.
+Overall status uses emoji instead of color words:
 
-Authentication or search failures return `isError: true`; the tool never fabricates a briefing. Partial dependency lookups are disclosed in `Data limitations`. No comments, transitions, worklogs, approvals, or other Jira writes are performed.
+- `🔴 / cần xử lý ngay` — high-impact confirmed dependency or overdue dependency
+- `🟠 / cần theo dõi` — material overdue, stale, heuristic, or missing-data signals
+- `🟢 / ổn` — no material signal, including empty projects (weighted progress `N/A`)
+
+Authentication or search failures return `isError: true`; the tool never fabricates a briefing. Partial dependency lookups are disclosed in a one-line note after the actions. No comments, transitions, worklogs, approvals, or other Jira writes are performed.
 
 ## Example
 
